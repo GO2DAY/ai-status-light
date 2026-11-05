@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'"
+  />
+  <title>tooltip</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111827;
+      font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+      color: #d1d5db;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .card {
+      margin: 3px;
+      padding: 10px 12px;
+      height: calc(100vh - 6px);
+      overflow-y: auto;
+      background: rgba(17, 24, 39, 0.97);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .head { display: flex; align-items: center; gap: 6px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .dot.running { background: #22c55e; box-shadow: 0 0 6px 1px rgba(34,197,94,.55); }
+    .dot.idle { background: #facc15; box-shadow: 0 0 6px 1px rgba(250,204,21,.45); }
+    .dot.stuck { background: #ef4444; box-shadow: 0 0 8px 2px rgba(239,68,68,.6); animation: blink 1s ease-in-out infinite; }
+    .dot.assist { background: #a855f7; box-shadow: 0 0 10px 3px rgba(168,85,247,.75); animation: blink 0.8s ease-in-out infinite; }
+    .dot.offline { background: #6b7280; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .15; } }
+    .name { font-size: 12px; font-weight: 600; color: #f3f4f6; }
+    .id { color: #6b7280; font-size: 10px; }
+    .row { margin-top: 4px; word-break: break-all; }
+    .muted { color: #6b7280; font-size: 10px; }
+    .task { color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <span id="dot" class="dot offline"></span>
+      <span id="name" class="name">-</span>
+      <span id="aid" class="id"></span>
+    </div>
+    <div class="row"><span id="statusLabel">状态：</span><span id="status">-</span><span id="auto" class="muted"></span></div>
+    <div class="row task" id="taskRow" style="display:none"><span id="taskLabel">任务：</span><span id="task"></span></div>
+    <div class="row muted"><span id="heartbeatLabel">最后心跳：</span><span id="heartbeat">-</span></div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script>
+    // v1.5.0 双语：文案全部走 main/i18n.js（与主进程/设置面板同一语言包），
+    // 语言随主进程 tooltip:data 载荷里的 lang 字段走（settings 切换即时生效）。
+    const I = window.ASL_I18N;
+    let currentLang = 'zh-CN';
+    let currentAgent = null;
+
+    function t(key, params) {
+      return I.t(currentLang, key, params);
+    }
+
+    function relTime(ts) {
+      if (!ts) return t('time.never');
+      const d = Date.now() - ts;
+      if (d < 5000) return t('time.just');
+      if (d < 60000) return t('time.secAgo', { n: Math.floor(d / 1000) });
+      if (d < 3600000) return t('time.minAgo', { n: Math.floor(d / 60000) });
+      return t('time.hourAgo', { n: Math.floor(d / 3600000) });
+    }
+
+    function render(data) {
+      // 兼容旧载荷（纯 agent 对象，无 lang 字段）
+      const agent = data && data.agent ? data.agent : data;
+      if (data && typeof data.lang === 'string') currentLang = data.lang;
+      if (!agent) return;
+      currentAgent = agent;
+      document.getElementById('dot').className = 'dot ' + (agent.status || 'offline');
+      document.getElementById('name').textContent = agent.name || agent.id || '-';
+      document.getElementById('aid').textContent = agent.id || '';
+      document.getElementById('statusLabel').textContent = t('tip.status');
+      document.getElementById('taskLabel').textContent = t('tip.task');
+      document.getElementById('heartbeatLabel').textContent = t('tip.heartbeat');
+      document.getElementById('status').textContent = t('status.' + (agent.status || 'offline'));
+      document.getElementById('auto').textContent = agent.auto ? t('status.autoDowngrade') : '';
+      const taskRow = document.getElementById('taskRow');
+      if (agent.task) {
+        taskRow.style.display = '';
+        document.getElementById('task').textContent = agent.task;
+      } else {
+        taskRow.style.display = 'none';
+      }
+      document.getElementById('heartbeat').textContent = relTime(agent.lastHeartbeat);
+    }
+
+    window.tooltipApi.onData(render);
+    // Keep the relative heartbeat text fresh while hovering.
+    setInterval(() => {
+      if (currentAgent) {
+        document.getElementById('heartbeat').textContent = relTime(currentAgent.lastHeartbeat);
+      }
+    }, 2000);
+  </script>
+</body>
+</html>

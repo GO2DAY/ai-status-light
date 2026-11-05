@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: auto;
+  background: transparent;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/*
+ * Drag region markers.
+ *
+ * NOTE: -webkit-app-region: drag is intentionally NOT used. Its native
+ * Windows implementation enters an OS modal move loop on the main thread,
+ * and if that loop gets stuck the whole main process freezes (timers stop,
+ * HTTP service goes silent). Dragging is implemented over IPC instead
+ * (window:dragStart/dragMove/dragEnd); .asl-drag / .asl-no-drag are just
+ * semantic markers used by the renderer's drag handler.
+ */
+.asl-drag {
+  cursor: move;
+}
+
+.asl-no-drag {
+  /* marker class: interactive elements that must not start a window drag */
+}

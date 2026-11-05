@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
+<title>AI Status Light - Settings</title>
+<style>
+  :root {
+    --bg: #111827;
+    --panel: #1f2937;
+    --panel2: #273449;
+    --border: #374151;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --danger: #ef4444;
+    --ok: #22c55e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    font-size: 13px;
+    overflow-x: hidden;
+  }
+  .wrap { padding: 16px 18px 12px; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  h2 {
+    font-size: 13px;
+    margin: 18px 0 8px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .hint { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+
+  /* v1.5.0：醒目标题栏 ×（原生窗口框架的 × 不可定制，页面内补一个大的） */
+  .titlebar { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .close-x {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .close-x:hover { background: #ef444433; color: #fca5a5; }
+
+  /* 语言切换下拉（面板顶部，切换即重渲染） */
+  .lang-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; }
+  .lang-row select {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 4px 8px;
+    font-size: 12px;
+    outline: none;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 6px; text-align: left; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--border); }
+  td { border-bottom: 1px solid #1f2937aa; }
+  input[type="text"] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 8px;
+    font-size: 13px;
+    outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  input[type="text"].invalid { border-color: var(--danger); }
+  input[type="text"]:disabled { opacity: 0.55; cursor: not-allowed; }
+  .id-tag {
+    display: inline-block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: var(--muted);
+    font-family: Consolas, monospace;
+    font-size: 12px;
+  }
+  .btn {
+    border: none;
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #fff;
+    background: var(--accent);
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  .btn.secondary:hover { background: var(--border); }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn.danger:hover { background: #ef444422; }
+
+  .switches { display: flex; flex-direction: column; gap: 10px; }
+  .switch-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .switch-row input[type="checkbox"] { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--accent); }
+  .switch-row .label { font-weight: 600; }
+  .switch-row .desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .topic-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .topic-value {
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    color: var(--ok);
+    word-break: break-all;
+    user-select: text;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  /* v1.6.1 功能一：操作栏移到顶部 sticky 冻结（滚动不消失），左版本号/
+     中检查更新/右取消保存；背景不透明压住进滚内容 */
+  .stickybar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg);
+    margin: 8px 0 4px;
+    padding: 8px 0;
+    border-top: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-version { color: var(--muted); font-size: 12px; font-family: Consolas, monospace; white-space: nowrap; }
+  .update-feedback { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .update-feedback .link-btn { font-size: 12px; }
+  /* dirty 呼吸灯：有未保存改动时保存按钮脉冲提醒（1.2s 循环，醒目不刺眼） */
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.55); }
+    50% { box-shadow: 0 0 14px 5px rgba(59, 130, 246, 0.35); }
+  }
+  .btn.breathing { animation: breathe 1.2s ease-in-out infinite; }
+  #status { flex: 1; font-size: 12px; min-height: 16px; }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--danger); }
+  #status.warn { color: #f59e0b; }
+  .row-error { color: var(--danger); font-size: 11px; margin-top: 2px; display: none; }
+
+  /* 拖放区（v1.4.3）：拖入 .lnk 快捷方式或 exe 快速添加 AI 源 */
+  .dropzone {
+    margin-top: 10px;
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 16px 12px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    background: transparent;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+  .dropzone .dz-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .dropzone.dragover {
+    border-color: var(--accent);
+    background: #3b82f61a;
+    color: var(--text);
+  }
+  .dropzone.busy { opacity: 0.6; pointer-events: none; }
+
+  /* v1.5.1：接入提示词卡片 */
+  .prompt-text {
+    width: 100%;
+    background: #0b1220;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 8px;
+    resize: vertical;
+    outline: none;
+    white-space: pre-wrap;
+  }
+  .prompt-text:focus { border-color: var(--accent); color: var(--text); }
+  .alert-fields { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; width: 100%; }
+  .alert-fields .field-label { color: var(--muted); font-size: 12px; }
+  .alert-fields input[type="text"], .alert-fields input[type="password"] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: Consolas, monospace;
+    outline: none;
+  }
+  .alert-fields input:focus { border-color: var(--accent); }
+  .alert-sub { display: flex; gap: 16px; margin-top: 4px; }
+  .alert-sub label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
+
+  /* v1.6.0：快捷添加预选库（分组可折叠） */
+  .preset-group { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); margin-bottom: 6px; overflow: hidden; }
+  .preset-group-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; cursor: pointer; user-select: none; font-weight: 600; }
+  .preset-group-head:hover { background: var(--panel2); }
+  .preset-group-head .arrow { color: var(--muted); font-size: 11px; }
+  .preset-items { border-top: 1px solid var(--border); }
+  .preset-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid #1f293766; }
+  .preset-item:first-child { border-top: none; }
+  .preset-name { flex: 1; }
+  .badge-cloud { font-size: 10px; color: #f59e0b; border: 1px solid #f59e0b66; border-radius: 4px; padding: 1px 5px; cursor: pointer; white-space: nowrap; }
+  .badge-cloud:hover { background: #f59e0b22; }
+  .preset-prompt { padding: 4px 12px 10px; display: none; }
+
+  /* v1.6.0：告警引流位 + 关于角 */
+  .promo-gold { margin-top: 8px; }
+  .promo-gold .link-btn { color: #f59e0b; }
+  .about-corner { margin-top: 18px; padding-top: 10px; border-top: 1px dashed var(--border); color: var(--muted); font-size: 12px; }
+  .about-corner .about-line { margin: 4px 0; }
+  .link-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; text-decoration: underline; }
+  .link-btn:hover { color: var(--accent-hover); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="titlebar">
+    <div>
+      <h1 id="hTitle"></h1>
+      <p class="hint" id="hSubtitle"></p>
+      <div class="lang-row">
+        <span class="hint" id="langLabel" style="margin:0"></span>
+        <select id="langSelect">
+          <option value="auto"></option>
+          <option value="zh-CN"></option>
+          <option value="en-US"></option>
+        </select>
+      </div>
+    </div>
+    <button class="close-x" id="closeX" type="button" aria-label="Close">×</button>
+  </div>
+
+  <!-- v1.6.1 功能一/三：顶部冻结操作栏（版本号 + 检查更新 + 状态 + 取消/保存） -->
+  <div class="footer stickybar" id="stickybar">
+    <span class="topbar-version" id="topVersion"></span>
+    <button class="btn secondary small" id="checkUpdateBtn" type="button"></button>
+    <span class="update-feedback" id="updateFeedback"></span>
+    <span id="status"></span>
+    <button class="btn secondary" id="cancelBtn"></button>
+    <button class="btn" id="saveBtn"></button>
+  </div>
+
+  <h2 id="hAgents"></h2>
+  <table id="agentTable">
+    <thead>
+      <tr>
+        <th style="width: 22%" id="colName"></th>
+        <th style="width: 20%" id="colId"></th>
+        <th style="width: 22%" id="colProcess"></th>
+        <th style="width: 26%" id="colKeywords"></th>
+        <th style="width: 10%"></th>
+      </tr>
+    </thead>
+    <tbody id="agentRows"></tbody>
+  </table>
+  <div style="margin-top: 8px">
+    <button class="btn secondary small" id="addBtn"></button>
+    <span class="hint" style="margin-left: 8px" id="addHint"></span>
+  </div>
+  <div class="dropzone" id="dropzone">
+    <div class="dz-title" id="dropTitle"></div>
+    <div id="dropHint"></div>
+  </div>
+
+  <!-- v1.6.0 功能一：快捷添加预选库 -->
+  <h2 id="hQuickAdd"></h2>
+  <p class="hint" id="quickAddHint" style="margin-bottom:8px"></p>
+  <div id="presetGroups"></div>
+
+  <h2 id="hSwitches"></h2>
+  <div class="switches">
+    <label class="switch-row">
+      <input type="checkbox" id="swScreenWatch" />
+      <span>
+        <span class="label" id="lbScreenWatch"></span>
+        <div class="desc" id="descScreenWatch"></div>
+      </span>
+    </label>
+    <label class="switch-row">
+      <input type="checkbox" id="swCloudRelay" />
+      <span>
+        <span class="label" id="lbCloudRelay"></span>
+        <div class="desc" id="descCloudRelay"></div>
+        <div class="topic-row">
+          <span class="desc" style="margin:0" id="lbMqttTopic"></span>
+          <span class="topic-value" id="mqttTopicText"></span>
+          <button class="btn secondary small" id="regenTopicBtn" type="button"></button>
+        </div>
+        <div class="desc" id="descMqttTopic"></div>
+        <!-- v1.6.0 功能四：broker 可配置（留空 = 公共默认） -->
+        <div class="alert-fields">
+          <span class="field-label" id="lbMqttBroker"></span>
+          <input type="text" id="mqttBrokerInput" />
+          <span class="field-label" id="lbMqttBrokerWss"></span>
+          <input type="text" id="mqttBrokerWssInput" />
+        </div>
+      </span>
+    </label>
+    <label class="switch-row">
+      <input type="checkbox" id="swSoundOn" />
+      <span>
+        <span class="label" id="lbSoundOn"></span>
+        <div class="desc" id="descSoundOn"></div>
+      </span>
+    </label>
+    <div class="switch-row">
+      <span style="margin-top:2px">🔊</span>
+      <span style="flex:1">
+        <span class="label" id="lbVolume"></span>
+        <div class="desc" id="descVolume"></div>
+        <div style="margin-top:6px; display:flex; gap:14px">
+          <label><input type="radio" name="soundVolume" value="low" /> <span id="volLow"></span></label>
+          <label><input type="radio" name="soundVolume" value="medium" /> <span id="volMid"></span></label>
+          <label><input type="radio" name="soundVolume" value="high" /> <span id="volHigh"></span></label>
+        </div>
+      </span>
+    </div>
+    <label class="switch-row">
+      <input type="checkbox" id="swRepeatAlert" />
+      <span>
+        <span class="label" id="lbRepeatAlert"></span>
+        <div class="desc" id="descRepeatAlert"></div>
+      </span>
+    </label>
+    <label class="switch-row">
+      <input type="checkbox" id="swAutoDiscover" />
+      <span>
+        <span class="label" id="lbAutoDiscover"></span>
+        <div class="desc" id="descAutoDiscover"></div>
+      </span>
+    </label>
+    <label class="switch-row">
+      <input type="checkbox" id="swOpenAtLogin" />
+      <span>
+        <span class="label" id="lbOpenAtLogin"></span>
+        <div class="desc" id="descOpenAtLogin"></div>
+      </span>
+    </label>
+  </div>
+
+  <h2 id="hPrompts"></h2>
+  <p class="hint" id="promptsHint" style="margin-bottom:8px"></p>
+  <div class="switches">
+    <div class="switch-row" style="flex-direction:column; align-items:stretch; gap:6px">
+      <span class="label" id="lbPromptHttp"></span>
+      <textarea id="promptHttpText" class="prompt-text" readonly rows="9"></textarea>
+      <div><button class="btn secondary small" id="copyHttpBtn" type="button"></button></div>
+    </div>
+    <div class="switch-row" style="flex-direction:column; align-items:stretch; gap:6px">
+      <span class="label" id="lbPromptMqtt"></span>
+      <textarea id="promptMqttText" class="prompt-text" readonly rows="10"></textarea>
+      <div><button class="btn secondary small" id="copyMqttBtn" type="button"></button></div>
+    </div>
+  </div>
+
+  <h2 id="hAlert"></h2>
+  <div class="switches">
+    <label class="switch-row">
+      <input type="checkbox" id="swAlertEnabled" />
+      <span style="flex:1">
+        <span class="label" id="lbAlertEnabled"></span>
+        <div class="desc" id="descAlert"></div>
+        <div class="alert-fields">
+          <span class="field-label" id="lbAlertUrl"></span>
+          <input type="text" id="alertUrl" />
+          <span class="field-label" id="lbAlertKey"></span>
+          <input type="password" id="alertKey" autocomplete="off" />
+          <div class="alert-sub">
+            <label><input type="checkbox" id="swAlertAssist" /> <span id="lbAlertAssist"></span></label>
+            <label><input type="checkbox" id="swAlertStuck" /> <span id="lbAlertStuck"></span></label>
+          </div>
+          <!-- v1.6.0 功能六：URL 为空时的引流位（金色小字 + 按钮） -->
+          <div class="promo-gold" id="alertPromo" style="display:none">
+            <button class="link-btn" id="alertPromoBtn" type="button"></button>
+          </div>
+        </div>
+      </span>
+    </label>
+  </div>
+
+  <div id="blacklistSection" style="display:none">
+    <h2 id="hBlacklist"></h2>
+    <p class="hint" style="margin-bottom:6px" id="blacklistHint"></p>
+    <table>
+      <tbody id="blacklistRows"></tbody>
+    </table>
+  </div>
+
+  <!-- v1.6.0 功能六：关于/支持角（静态文字，不弹窗不闪烁） -->
+  <div class="about-corner" id="aboutCorner">
+    <h2 id="hAbout" style="margin-top:0"></h2>
+    <div class="about-line"><span id="lbAboutAuthor"></span>: <span id="aboutEmail"></span></div>
+    <div class="about-line"><button class="link-btn" id="aboutKofiBtn" type="button"></button></div>
+    <div class="about-line" id="aboutPromo" style="display:none"><button class="link-btn" id="aboutPromoBtn" type="button"></button></div>
+  </div>
+
+</div>
+
+<script src="i18n.js"></script>
+<script src="integration-prompt.js"></script>
+<script src="ai-presets.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var I = window.ASL_I18N;
+  var PROMPT = window.ASL_PROMPT;
+  var PRESETS = window.ASL_PRESETS;
+  var ID_PATTERN = /^[a-z0-9_-]{1,24}$/i;
+  var rowsEl = document.getElementById('agentRows');
+  var statusEl = document.getElementById('status');
+  // MQTT 主题码（settingsPanel:get 加载；「重新生成」后更新）
+  var mqttTopic = '';
+  // v1.6.0：预选库（本地内置为底，远程作者配置为准）与作者配置中心有效值
+  var presetGroups = PRESETS ? PRESETS.PRESET_GROUPS : [];
+  var authorCfg = {};
+  var collapsedGroups = {}; // groupEn -> true = 折叠（默认全部展开）
+  var expandedPromptId = null; // 云端徽标点开的提示词条目 id
+
+  // 每行对应一个 agent：{ id (已有则锁定), isNew }
+  var rows = [];
+  // 面板快照时间戳：保存时回传，主进程据此豁免"面板打开后自动发现"的 agent
+  var snapshotAt = 0;
+  // 自动发现黑名单 [{id, name}]
+  var blacklist = [];
+  // 当前界面语言（已解析 zh-CN/en-US）与原始设置值（auto/zh-CN/en-US）
+  var lang = 'zh-CN';
+  var languageSetting = 'auto';
+
+  /** 取当前语言文案。 */
+  function L(key, params) {
+    return I.t(lang, key, params);
+  }
+
+  /** 主进程校验报错本地化：有 errorKey 用语言包，否则原样（兜底原文）。 */
+  function errText(res, fallbackKey) {
+    if (res && res.key) return L(res.key, res.params);
+    return (res && res.error) || L(fallbackKey || 'sw.saveFail');
+  }
+
+  /** 静态文案一次性套用（语言切换时重跑）。 */
+  function applyStaticTexts() {
+    document.title = I.t(lang, 'title.settings');
+    var map = {
+      hTitle: 'title.settings',
+      hSubtitle: 'sw.subtitle',
+      langLabel: 'sw.language',
+      hAgents: 'sw.agents',
+      colName: 'sw.colName',
+      colId: 'sw.colId',
+      colProcess: 'sw.colProcess',
+      colKeywords: 'sw.colKeywords',
+      addBtn: 'sw.addBtn',
+      addHint: 'sw.addHint',
+      dropTitle: 'sw.dropTitle',
+      dropHint: 'sw.dropHint',
+      hSwitches: 'sw.switches',
+      lbScreenWatch: 'sw.screenWatch',
+      descScreenWatch: 'sw.screenWatchDesc',
+      lbCloudRelay: 'sw.cloudRelay',
+      descCloudRelay: 'sw.cloudRelayDesc',
+      lbMqttTopic: 'sw.mqttTopic',
+      descMqttTopic: 'sw.mqttTopicDesc',
+      regenTopicBtn: 'sw.regenerate',
+      lbSoundOn: 'sw.soundOn',
+      descSoundOn: 'sw.soundOnDesc',
+      lbVolume: 'sw.volume',
+      descVolume: 'sw.volumeDesc',
+      volLow: 'sw.volLow',
+      volMid: 'sw.volMid',
+      volHigh: 'sw.volHigh',
+      lbRepeatAlert: 'sw.repeatAlert',
+      descRepeatAlert: 'sw.repeatAlertDesc',
+      lbAutoDiscover: 'sw.autoDiscover',
+      descAutoDiscover: 'sw.autoDiscoverDesc',
+      lbOpenAtLogin: 'sw.openAtLogin',
+      descOpenAtLogin: 'sw.openAtLoginDesc',
+      hBlacklist: 'sw.blacklist',
+      blacklistHint: 'sw.blacklistHint',
+      cancelBtn: 'sw.cancel',
+      saveBtn: 'sw.save',
+      // v1.5.1：提示词区 + 电话告警区
+      hPrompts: 'sw.prompts',
+      promptsHint: 'sw.promptsHint',
+      lbPromptHttp: 'sw.promptHttp',
+      lbPromptMqtt: 'sw.promptMqtt',
+      copyHttpBtn: 'sw.copy',
+      copyMqttBtn: 'sw.copy',
+      hAlert: 'sw.alert',
+      lbAlertEnabled: 'sw.alertEnabled',
+      descAlert: 'sw.alertDesc',
+      lbAlertUrl: 'sw.alertUrl',
+      lbAlertKey: 'sw.alertKey',
+      lbAlertAssist: 'sw.alertOnAssist',
+      lbAlertStuck: 'sw.alertOnStuck',
+      // v1.6.0：快捷添加 / broker / 关于角
+      hQuickAdd: 'sw.quickAdd',
+      quickAddHint: 'sw.quickAddHint',
+      lbMqttBroker: 'sw.mqttBroker',
+      lbMqttBrokerWss: 'sw.mqttBrokerWss',
+      hAbout: 'sw.about',
+      lbAboutAuthor: 'sw.aboutAuthor',
+      checkUpdateBtn: 'sw.checkUpdate',
+    };
+    Object.keys(map).forEach(function (id) {
+      var node = document.getElementById(id);
+      if (node) node.textContent = L(map[id]);
+    });
+    document.getElementById('closeX').setAttribute('aria-label', L('sw.close'));
+    document.getElementById('alertUrl').placeholder = L('sw.alertUrlPh');
+    document.getElementById('alertKey').placeholder = L('sw.alertKeyPh');
+    document.getElementById('mqttBrokerInput').placeholder = L('sw.mqttBrokerPh');
+    document.getElementById('mqttBrokerWssInput').placeholder = L('sw.mqttBrokerWssPh');
+    document.getElementById('alertPromoBtn').textContent = L('sw.alertPromo');
+    document.getElementById('aboutKofiBtn').textContent = L('sw.aboutKofi');
+    // 语言下拉选项文案（固定三档）
+    var sel = document.getElementById('langSelect');
+    sel.options[0].textContent = L('sw.langAuto');
+    sel.options[1].textContent = L('sw.langZh');
+    sel.options[2].textContent = L('sw.langEn');
+    renderPrompts();
+    renderPresets();
+    renderAbout();
+    refreshAlertPromo();
+  }
+
+  /** 当前表单里的 broker 配置（提示词卡片/云端徽标用输入框现值，改了还没保存也即时反映）。 */
+  function currentBroker() {
+    return {
+      tcp: document.getElementById('mqttBrokerInput').value.trim(),
+      wss: document.getElementById('mqttBrokerWssInput').value.trim(),
+    };
+  }
+
+  /** v1.5.1：按当前语言 + 当前主题码重渲染两张提示词卡片（v1.6.0：broker 现值入词）。 */
+  function renderPrompts() {
+    document.getElementById('promptHttpText').value = PROMPT.buildHttpPrompt(lang);
+    document.getElementById('promptMqttText').value = PROMPT.buildMqttPrompt(mqttTopic, lang, currentBroker());
+  }
+
+  // ------------------------------------------------------------------
+  // v1.6.0 功能一：快捷添加预选库
+  // ------------------------------------------------------------------
+
+  /** 该预设 id 是否已在灯清单（含未保存的新行）。 */
+  function presetAdded(id) {
+    return rows.some(function (r) { return r.id.trim().toLowerCase() === id; });
+  }
+
+  function renderPresets() {
+    var host = document.getElementById('presetGroups');
+    host.innerHTML = '';
+    presetGroups.forEach(function (g) {
+      var groupName = lang === 'en-US' ? (g.groupEn || g.group) : (g.group || g.groupEn);
+      var box = el('div', { 'class': 'preset-group' }, host);
+      var head = el('div', { 'class': 'preset-group-head' }, box);
+      el('span', null, head).textContent = groupName + '（' + g.items.length + '）';
+      var collapsed = collapsedGroups[g.groupEn || g.group] === true;
+      el('span', { 'class': 'arrow' }, head).textContent = collapsed ? '▼' : '▲';
+      var itemsBox = el('div', { 'class': 'preset-items' }, box);
+      if (collapsed) itemsBox.style.display = 'none';
+      head.addEventListener('click', function () {
+        collapsedGroups[g.groupEn || g.group] = !collapsed;
+        renderPresets();
+      });
+      g.items.forEach(function (it) {
+        var row = el('div', { 'class': 'preset-item' }, itemsBox);
+        el('span', { 'class': 'preset-name' }, row).textContent = it.name;
+        // 官网↗：主进程代开（https 白名单）
+        var siteBtn = el('button', { 'class': 'btn secondary small', type: 'button' }, row);
+        siteBtn.textContent = L('sw.presetSite');
+        siteBtn.addEventListener('click', function () {
+          window.aslSettings.openExternal(it.url);
+        });
+        // cloudOnly：徽标点击展开该 AI 的接入提示词（复用 integration-prompt）
+        if (it.cloudOnly) {
+          var badge = el('span', { 'class': 'badge-cloud' }, row);
+          badge.textContent = L('sw.presetCloud') + (expandedPromptId === it.id ? ' ▲' : ' ▼');
+          badge.addEventListener('click', function () {
+            expandedPromptId = expandedPromptId === it.id ? null : it.id;
+            renderPresets();
+          });
+        }
+        var addBtn = el('button', { 'class': 'btn secondary small', type: 'button' }, row);
+        if (presetAdded(it.id)) {
+          addBtn.textContent = L('sw.presetAdded');
+          addBtn.disabled = true;
+        } else {
+          addBtn.textContent = L('sw.presetAdd');
+          addBtn.addEventListener('click', function () { addPreset(it); });
+        }
+        // 展开的云端提示词块
+        if (it.cloudOnly && expandedPromptId === it.id) {
+          var pp = el('div', { 'class': 'preset-prompt' }, itemsBox);
+          pp.style.display = '';
+          var taId = 'presetPrompt_' + it.id;
+          var ta = el('textarea', { 'class': 'prompt-text', id: taId, rows: '8' }, pp);
+          ta.readOnly = true;
+          ta.value = PROMPT.buildMqttPrompt(mqttTopic, lang, currentBroker());
+          var cp = el('button', { 'class': 'btn secondary small', type: 'button' }, pp);
+          cp.textContent = L('sw.copy');
+          cp.style.marginTop = '6px';
+          cp.addEventListener('click', function () {
+            copyText(ta.value, cp);
+          });
+        }
+      });
+    });
+  }
+
+  /** 预设添加：进 rows（id 锁定），走既有 doSave 链路立即落盘，窗口不关。 */
+  function addPreset(it) {
+    rows.push({
+      id: it.id,
+      name: it.name,
+      process: it.exe || '',
+      // 有客户端才带窗口关键词；cloudOnly 绝不留关键词（校验会拦「无进程有关键词」）
+      windowKeywords: it.exe && Array.isArray(it.windowKeywords) ? it.windowKeywords.join(', ') : '',
+      isNew: false,
+    });
+    // QA R8：先亮灯再自保存——doSave 成功盖回 false，失败时灯保持亮（行已留在表里）
+    setDirty(true);
+    render();
+    doSave(function () {
+      renderPresets(); // 按钮翻成「已添加」
+      setStatus(L('sw.presetAddedOk', { name: it.name }), 'ok');
+    });
+  }
+
+  /** 一键复制的公共实现（提示词卡 + 预设云端徽标共用）。 */
+  function copyText(text, btn) {
+    function done(ok) {
+      if (ok) {
+        var original = L('sw.copy');
+        btn.textContent = L('sw.copied');
+        btn.disabled = true;
+        setTimeout(function () {
+          btn.textContent = original;
+          btn.disabled = false;
+        }, 2000);
+      } else {
+        setStatus(L('sw.copyFail'), 'err');
+      }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      done(false);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // v1.6.0 功能六：告警引流位 + 关于/支持角
+  // ------------------------------------------------------------------
+
+  /** URL 为空才显示引流位（与 remote-config.shouldShowAlertPromo 同规则）。 */
+  function refreshAlertPromo() {
+    var url = document.getElementById('alertUrl').value.trim();
+    document.getElementById('alertPromo').style.display = url ? 'none' : '';
+  }
+
+  function renderAbout() {
+    // 邮箱只来自远程配置快照（主进程 settingsPanel:get 恒给 authorConfig），
+    // 此处不得硬编码任何字面量——防「以为生效实则写死」（v1.6.1 确认项纪律）
+    var email = authorCfg && authorCfg.contactEmail ? authorCfg.contactEmail : '';
+    document.getElementById('aboutEmail').textContent = email;
+    var promo = authorCfg && authorCfg.promo;
+    var promoBox = document.getElementById('aboutPromo');
+    if (promo && promo.enabled === true) {
+      var text = lang === 'en-US' ? (promo.textEn || promo.text) : (promo.text || promo.textEn);
+      if (text) {
+        var btn = document.getElementById('aboutPromoBtn');
+        btn.textContent = text + (promo.url ? ' →' : '');
+        btn.onclick = function () {
+          if (promo.url) window.aslSettings.openExternal(promo.url);
+        };
+        promoBox.style.display = '';
+      } else {
+        promoBox.style.display = 'none';
+      }
+    } else {
+      promoBox.style.display = 'none';
+    }
+  }
+
+  /** 一键复制（clipboard API，execCommand 兜底）；成功按钮短暂变「已复制 ✓」。 */
+  function wireCopyButton(btnId, textId) {
+    var btn = document.getElementById(btnId);
+    btn.addEventListener('click', function () {
+      var text = document.getElementById(textId).value;
+      function done(ok) {
+        if (ok) {
+          var original = L('sw.copy');
+          btn.textContent = L('sw.copied');
+          btn.disabled = true;
+          setTimeout(function () {
+            btn.textContent = original;
+            btn.disabled = false;
+          }, 2000);
+        } else {
+          setStatus(L('sw.copyFail'), 'err');
+        }
+      }
+      function legacyCopy() {
+        try {
+          var ta = document.getElementById(textId);
+          ta.focus();
+          ta.select();
+          done(document.execCommand('copy'));
+        } catch (_e) {
+          done(false);
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done(true); }, legacyCopy);
+      } else {
+        legacyCopy();
+      }
+    });
+  }
+
+  function renderBlacklist() {
+    var section = document.getElementById('blacklistSection');
+    var tbody = document.getElementById('blacklistRows');
+    tbody.innerHTML = '';
+    if (!blacklist.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    blacklist.forEach(function (entry, idx) {
+      var tr = el('tr', null, tbody);
+      var tdName = el('td', null, tr);
+      el('span', null, tdName).textContent = entry.name;
+      var tdId = el('td', null, tr);
+      el('span', { 'class': 'id-tag' }, tdId).textContent = entry.id;
+      var tdOp = el('td', { style: 'text-align:right' }, tr);
+      var btn = el('button', { 'class': 'btn secondary small', type: 'button' }, tdOp);
+      btn.textContent = L('sw.unblacklist');
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        window.aslSettings.unblacklist(entry.id).then(function (res) {
+          if (res && res.ok) {
+            blacklist.splice(idx, 1);
+            renderBlacklist();
+            setStatus(L('sw.unblacklistOk', { name: entry.name }), 'ok');
+          } else {
+            btn.disabled = false;
+            setStatus(L('sw.unblacklistFail', { err: (res && res.error) || '?' }), 'err');
+          }
+        });
+      });
+    });
+  }
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text || '';
+    statusEl.className = kind || '';
+  }
+
+  // ------------------------------------------------------------------
+  // v1.6.1 功能一：dirty 呼吸灯——面板内任何输入改动（表格行编辑/勾选/下拉，
+  // 事件委托捕获，程序化赋值不触发）→ 保存按钮脉冲提醒；保存成功停止。
+  // ------------------------------------------------------------------
+  var dirty = false;
+  function setDirty(v) {
+    dirty = v;
+    document.getElementById('saveBtn').classList.toggle('breathing', v);
+  }
+  document.addEventListener('input', function () { setDirty(true); }, true);
+  document.addEventListener('change', function () { setDirty(true); }, true);
+
+  // v1.6.1 功能三：手动「检查更新」——三态反馈，点了必须有回响
+  document.getElementById('checkUpdateBtn').addEventListener('click', function () {
+    var btn = this;
+    var fb = document.getElementById('updateFeedback');
+    fb.textContent = L('sw.updateChecking');
+    btn.disabled = true;
+    window.aslSettings.checkUpdate().then(function (res) {
+      btn.disabled = false;
+      if (res && res.state === 'new' && res.version) {
+        fb.textContent = '';
+        var b = el('button', { 'class': 'link-btn', type: 'button' }, fb);
+        b.textContent = L('sw.updateNew', { version: res.version });
+        b.addEventListener('click', function () {
+          window.aslSettings.openExternal(res.url || 'https://github.com/');
+        });
+      } else if (res && res.state === 'latest') {
+        fb.textContent = L('sw.updateLatest');
+      } else {
+        fb.textContent = L('sw.updateNotReady');
+      }
+    }).catch(function () {
+      btn.disabled = false;
+      fb.textContent = L('sw.updateNotReady');
+    });
+  });
+
+  function el(tag, attrs, parent) {
+    var node = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        if (k === 'value') node.value = attrs[k];
+        else if (k === 'placeholder') node.placeholder = attrs[k];
+        else if (k === 'disabled' && attrs[k]) node.disabled = true;
+        else node.setAttribute(k, attrs[k]);
+      });
+    }
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+
+  function render() {
+    rowsEl.innerHTML = '';
+    rows.forEach(function (row, idx) {
+      var tr = el('tr', null, rowsEl);
+
+      var tdName = el('td', null, tr);
+      var nameInput = el('input', { type: 'text', value: row.name, placeholder: L('sw.phName') }, tdName);
+      nameInput.addEventListener('input', function () { row.name = nameInput.value; });
+
+      var tdId = el('td', null, tr);
+      if (row.isNew) {
+        var idInput = el('input', { type: 'text', value: row.id, placeholder: L('sw.phId') }, tdId);
+        idInput.addEventListener('input', function () { row.id = idInput.value; });
+        row._idInput = idInput;
+      } else {
+        el('span', { 'class': 'id-tag' }, tdId).textContent = row.id;
+      }
+
+      var tdProc = el('td', null, tr);
+      var procInput = el('input', { type: 'text', value: row.process, placeholder: L('sw.phProcess') }, tdProc);
+      procInput.addEventListener('input', function () { row.process = procInput.value; });
+
+      var tdWin = el('td', null, tr);
+      var winInput = el('input', { type: 'text', value: row.windowKeywords, placeholder: L('sw.phKeywords') }, tdWin);
+      winInput.addEventListener('input', function () { row.windowKeywords = winInput.value; });
+
+      var tdOp = el('td', null, tr);
+      var delBtn = el('button', { 'class': 'btn danger small', type: 'button' }, tdOp);
+      delBtn.textContent = L('sw.deleteRow');
+      delBtn.addEventListener('click', function () {
+        rows.splice(idx, 1);
+        setStatus('');
+        render();
+      });
+    });
+  }
+
+  function parseKeywords(text) {
+    return String(text || '')
+      .split(/[,，]/)
+      .map(function (s) { return s.trim(); })
+      .filter(Boolean);
+  }
+
+  // 客户端预校验（主进程还会用同一份规则再校验一次；报错双语走语言包）
+  function validateLocal() {
+    var seen = {};
+    for (var i = 0; i < rows.length; i += 1) {
+      var r = rows[i];
+      if (!r.name.trim()) return L('sw.valNameEmpty', { n: i + 1 });
+      var id = r.id.trim().toLowerCase();
+      if (id) {
+        if (!ID_PATTERN.test(id)) return L('sw.valIdInvalid', { n: i + 1, id: id });
+        if (seen[id]) return L('sw.valIdDup', { id: id });
+        seen[id] = true;
+      }
+      if (!r.process.trim() && r.windowKeywords.trim()) {
+        return L('sw.valKwNoProc', { n: i + 1 });
+      }
+    }
+    if (rows.length === 0) return L('sw.valNeedOne');
+    return null;
+  }
+
+  function gather() {
+    return {
+      agents: rows.map(function (r) {
+        return { id: r.id.trim().toLowerCase(), name: r.name.trim() };
+      }),
+      watchers: rows
+        .filter(function (r) { return r.process.trim(); })
+        .map(function (r) {
+          return {
+            // id 留空的新行：agent 为空，主进程从名称生成 id 后按 agentName 解析回填
+            agent: r.id.trim().toLowerCase(),
+            agentName: r.name.trim(),
+            process: r.process.trim(),
+            window: parseKeywords(r.windowKeywords),
+          };
+        }),
+      snapshotAt: snapshotAt,
+      language: languageSetting,
+      // v1.5.1 电话告警 webhook
+      alertWebhook: {
+        enabled: document.getElementById('swAlertEnabled').checked,
+        url: document.getElementById('alertUrl').value.trim(),
+        key: document.getElementById('alertKey').value,
+        onAssist: document.getElementById('swAlertAssist').checked,
+        onStuck: document.getElementById('swAlertStuck').checked,
+      },
+      soundOn: document.getElementById('swSoundOn').checked,
+      soundVolume: getVolume(),
+      repeatAlert: document.getElementById('swRepeatAlert').checked,
+      autoDiscover: document.getElementById('swAutoDiscover').checked,
+      cloudRelay: document.getElementById('swCloudRelay').checked,
+      screenWatch: document.getElementById('swScreenWatch').checked,
+      openAtLogin: document.getElementById('swOpenAtLogin').checked,
+      // v1.6.0 功能四：broker 可配置（空串 = 恢复默认）
+      mqttBroker: document.getElementById('mqttBrokerInput').value.trim(),
+      mqttBrokerWss: document.getElementById('mqttBrokerWssInput').value.trim(),
+    };
+  }
+
+  function getVolume() {
+    var radios = document.getElementsByName('soundVolume');
+    for (var i = 0; i < radios.length; i += 1) {
+      if (radios[i].checked) return radios[i].value;
+    }
+    return 'high';
+  }
+
+  function setVolume(v) {
+    var radios = document.getElementsByName('soundVolume');
+    for (var i = 0; i < radios.length; i += 1) {
+      radios[i].checked = radios[i].value === v;
+    }
+  }
+
+  document.getElementById('addBtn').addEventListener('click', function () {
+    // QA R8：程序化改动不走 input/change 事件，必须显式亮灯（空行也是未落盘改动）
+    setDirty(true);
+    rows.push({ id: '', name: '', process: '', windowKeywords: '', isNew: true });
+    render();
+    var inputs = rowsEl.querySelectorAll('tr:last-child input');
+    if (inputs.length) inputs[0].focus();
+  });
+
+  // v1.6.1 修复（QA R8 顺手项，team-lead 拍板）：dirty 时点取消/× 不直接丢——
+  // 按钮原位变「确认放弃修改？」，3 秒无操作自动复原，再点才真正关窗；
+  // dirty=false 维持原样直接关。防误丢未保存改动。
+  function guardClose(btn) {
+    if (!dirty) { window.aslSettings.close(); return; }
+    if (btn.dataset.armed === '1') { window.aslSettings.close(); return; }
+    btn.dataset.armed = '1';
+    if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = L('sw.confirmDiscard');
+    setTimeout(function () {
+      if (btn.dataset.armed === '1') {
+        btn.dataset.armed = '0';
+        btn.textContent = btn.dataset.label;
+      }
+    }, 3000);
+  }
+
+  document.getElementById('cancelBtn').addEventListener('click', function () {
+    guardClose(this);
+  });
+
+  // 标题栏醒目的 ×（v1.5.0）：与「取消」等价，只是更显眼
+  document.getElementById('closeX').addEventListener('click', function () {
+    guardClose(this);
+  });
+
+  // 语言切换：设置面板立即重渲染（本地预览）；保存后主进程广播灯条侧切换
+  document.getElementById('langSelect').addEventListener('change', function (e) {
+    languageSetting = e.target.value;
+    lang = I.resolveLanguage(languageSetting, navigator.language || 'zh-CN');
+    applyStaticTexts(); // 内部已含 renderPresets/renderAbout/refreshAlertPromo
+    render();
+    renderBlacklist();
+    setStatus('');
+  });
+
+  // v1.6.0 功能六：引流位显隐跟随 URL 输入；点击开 Ko-fi（远程配置为准，兜底 ko-fi.com/go2day）
+  document.getElementById('alertUrl').addEventListener('input', refreshAlertPromo);
+  document.getElementById('alertPromoBtn').addEventListener('click', function () {
+    window.aslSettings.openExternal(authorCfg.kofiUrl || 'https://ko-fi.com/go2day');
+  });
+  document.getElementById('aboutKofiBtn').addEventListener('click', function () {
+    window.aslSettings.openExternal(authorCfg.kofiUrl || 'https://ko-fi.com/go2day');
+  });
+
+  // 重新生成 MQTT 主题（v1.5.0 脱敏）：旧主题立即失效，云端脚本要换
+  document.getElementById('regenTopicBtn').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    window.aslSettings.regenerateTopic().then(function (res) {
+      btn.disabled = false;
+      if (res && res.ok && res.topic) {
+        mqttTopic = res.topic;
+        document.getElementById('mqttTopicText').textContent = res.topic;
+        renderPrompts(); // MQTT 提示词卡片里的主题码同步换新
+        setStatus(L('sw.regenerated'), 'ok');
+      } else {
+        setStatus(L('sw.regenerateFail') + ((res && res.error) ? '：' + res.error : ''), 'err');
+      }
+    }).catch(function (e) {
+      btn.disabled = false;
+      setStatus(L('sw.regenerateFail') + ': ' + (e && e.message ? e.message : e), 'err');
+    });
+  });
+
+  // 保存流程（保存按钮 & 拖放自动添加共用）。
+  // afterOk：保存成功后的附加动作（默认 1.2 秒后关窗）。
+  function doSave(afterOk) {
+    var err = validateLocal();
+    if (err) { setStatus(err, 'err'); return false; }
+    var payload = gather();
+    window.aslSettings.save(payload).then(function (res) {
+      if (res && res.ok) {
+        setDirty(false); // 呼吸灯停止（v1.6.1）
+        setStatus(L('sw.saved'), 'ok');
+        if (typeof afterOk === 'function') afterOk();
+        else setTimeout(function () { window.aslSettings.close(); }, 1200);
+      } else {
+        setStatus(errText(res), 'err');
+      }
+    }).catch(function (e) {
+      setStatus(L('sw.saveFail') + ': ' + (e && e.message ? e.message : e), 'err');
+    });
+    return true;
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', function () {
+    setStatus('');
+    doSave(null);
+  });
+
+  // ------------------------------------------------------------------
+  // 拖放快速添加（v1.4.3）：拖入 .lnk / exe → 主进程解析 → 自动填表并保存
+  // ------------------------------------------------------------------
+  var dropzone = document.getElementById('dropzone');
+
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('dragover');
+    });
+  });
+
+  dropzone.addEventListener('drop', function (e) {
+    if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+    var file = e.dataTransfer.files[0];
+    var fullPath = window.aslSettings.getPathForFile(file);
+    if (!fullPath) {
+      setStatus(L('sw.dropNoPath'), 'err');
+      return;
+    }
+    dropzone.classList.add('busy');
+    setStatus(L('sw.dropIdentifying', { name: file.name || fullPath }), '');
+    window.aslSettings.resolveShortcut(fullPath).then(function (res) {
+      dropzone.classList.remove('busy');
+      if (!res) { setStatus(L('sw.dropFail'), 'err'); return; }
+
+      if (!res.ok && !res.partial) {
+        // 不支持的扩展名等硬拒绝
+        setStatus(L('sw.dropReject'), 'err');
+        return;
+      }
+
+      var displayName = (res.displayName || '').trim();
+      var processName = (res.processName || '').trim();
+
+      // 已在清单中（按进程名或名称比对，忽略大小写）→ 不重复添加
+      var dup = rows.some(function (r) {
+        return (processName && r.process.trim().toLowerCase() === processName.toLowerCase()) ||
+               (displayName && r.name.trim().toLowerCase() === displayName.toLowerCase());
+      });
+      if (dup) {
+        setStatus(L('sw.dropDup', { name: displayName || processName }), 'warn');
+        return;
+      }
+
+      rows.push({
+        id: '',
+        name: displayName,
+        process: processName,
+        // 默认窗口关键词带一份显示名，方便画面检测开箱即用；
+        // partial（进程名为空）时不预填关键词，避免触发"有关键词但没进程"的校验拦截
+        windowKeywords: processName ? displayName : '',
+        isNew: true,
+      });
+      render();
+
+      if (res.partial) {
+        // lnk 解析不出 exe 目标：表单已预填名称，进程名留人工补
+        // QA R8：预填行未落盘，必须亮呼吸灯——否则点取消会静默丢弃
+        setDirty(true);
+        setStatus(L('sw.dropPartial'), 'warn');
+        var inputs = rowsEl.querySelectorAll('tr:last-child input');
+        if (inputs.length >= 3) inputs[2].focus();
+        return;
+      }
+
+      // 完整识别：直接走同一套校验 + 保存，实现"拖入即添加"。
+      // 整表校验不过时 doSave 会显示具体错误行，新行保留在表里供人工修正。
+      // QA R8：先亮灯再自保存——成功由 doSave 盖回 false，失败时灯保持亮（行还在表里）
+      setDirty(true);
+      doSave(function () {
+        setStatus(L('sw.dropAdded', { name: displayName }), 'ok');
+        setTimeout(function () { window.aslSettings.close(); }, 1200);
+      });
+    }).catch(function (err) {
+      dropzone.classList.remove('busy');
+      setStatus(L('sw.dropFailErr', { err: err && err.message ? err.message : err }), 'err');
+    });
+  });
+
+  // 初始加载
+  window.aslSettings.load().then(function (cfg) {
+    snapshotAt = cfg.snapshotAt || 0;
+    // v1.6.1：顶部冻结栏左侧版本号
+    document.getElementById('topVersion').textContent = 'v' + (cfg.version || '');
+    blacklist = Array.isArray(cfg.blacklist) ? cfg.blacklist : [];
+    languageSetting = typeof cfg.language === 'string' ? cfg.language : 'auto';
+    document.getElementById('langSelect').value = languageSetting;
+    lang = typeof cfg.resolvedLanguage === 'string' && I.PACKS[cfg.resolvedLanguage]
+      ? cfg.resolvedLanguage
+      : I.resolveLanguage(languageSetting, navigator.language || 'zh-CN');
+    applyStaticTexts();
+    renderBlacklist();
+    mqttTopic = cfg.mqttTopic || '';
+    document.getElementById('mqttTopicText').textContent = mqttTopic || '-';
+    // v1.6.0 功能四：broker 配置回填（空串 = 默认，placeholder 已展示默认地址）
+    document.getElementById('mqttBrokerInput').value = typeof cfg.mqttBroker === 'string' ? cfg.mqttBroker : '';
+    document.getElementById('mqttBrokerWssInput').value = typeof cfg.mqttBrokerWss === 'string' ? cfg.mqttBrokerWss : '';
+    // v1.6.0 功能一/三：预选库（主进程已按「本地为底、远程为准」合并）与作者配置
+    if (cfg.presets && PRESETS.validatePresets(cfg.presets).ok) presetGroups = cfg.presets;
+    authorCfg = cfg.authorConfig && typeof cfg.authorConfig === 'object' ? cfg.authorConfig : {};
+    renderPresets();
+    renderAbout();
+    refreshAlertPromo();
+    renderPrompts(); // applyStaticTexts 里也调了一次，这里主题码就位后再刷一次 MQTT 卡
+    // v1.5.1 电话告警配置回填
+    var aw = cfg.alertWebhook || {};
+    document.getElementById('swAlertEnabled').checked = aw.enabled === true;
+    document.getElementById('alertUrl').value = typeof aw.url === 'string' ? aw.url : '';
+    document.getElementById('alertKey').value = typeof aw.key === 'string' ? aw.key : '';
+    document.getElementById('swAlertAssist').checked = aw.onAssist !== false;
+    document.getElementById('swAlertStuck').checked = aw.onStuck !== false;
+    wireCopyButton('copyHttpBtn', 'promptHttpText');
+    wireCopyButton('copyMqttBtn', 'promptMqttText');
+    var watcherByAgent = {};
+    (cfg.watchers || []).forEach(function (w) { watcherByAgent[w.agent] = w; });
+    rows = (cfg.agents || []).map(function (a) {
+      var w = watcherByAgent[a.id];
+      return {
+        id: a.id,
+        name: a.name,
+        process: w ? w.process : '',
+        windowKeywords: w && Array.isArray(w.window) ? w.window.join(', ') : '',
+        isNew: false,
+      };
+    });
+    document.getElementById('swSoundOn').checked = cfg.soundOn !== false;
+    setVolume(cfg.soundVolume === 'low' || cfg.soundVolume === 'medium' ? cfg.soundVolume : 'high');
+    document.getElementById('swRepeatAlert').checked = cfg.repeatAlert !== false;
+    document.getElementById('swAutoDiscover').checked = cfg.autoDiscover !== false;
+    document.getElementById('swCloudRelay').checked = cfg.cloudRelay === true;
+    document.getElementById('swScreenWatch').checked = cfg.screenWatch !== false;
+    document.getElementById('swOpenAtLogin').checked = !!cfg.openAtLogin;
+    if (!cfg.packaged) {
+      // 开发模式下开机自启不生效，给个提示但不禁用（用户可能直接看）
+      document.querySelector('#swOpenAtLogin').closest('.switch-row').title = L('sw.openAtLoginDev');
+    }
+    render();
+    // v1.6.0 功能二：齿轮菜单「AI 源管理」经 URL hash 定位到灯源管理区
+    if (location.hash === '#agents') {
+      document.getElementById('hAgents').scrollIntoView({ block: 'start' });
+    }
+  }).catch(function (e) {
+    setStatus(L('sw.loadFail', { err: e && e.message ? e.message : e }), 'err');
+  });
+
+  // 设置窗口已开时再点「AI 源管理」：主进程经此通道要求滚动定位
+  if (window.aslSettings.onScrollTo) {
+    window.aslSettings.onScrollTo(function (section) {
+      if (section === 'agents') {
+        document.getElementById('hAgents').scrollIntoView({ block: 'start' });
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

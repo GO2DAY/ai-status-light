@@ -1,0 +1,139 @@
+# =============================================================================
+#  AI Status Light —— electron-builder 打包配置
+#
+#  产出两个交付物（老吴 2026-08-29 拍板：两个都要）
+#    1. nsis     → AI状态灯-<版本>-x64.exe      标准安装包，带开始菜单/桌面快捷方式
+#    2. portable → AI状态灯-<版本>-绿色版.exe    单文件绿色版，双击即用，不写注册表
+#
+#  构建命令：
+#    npm run build          # 先出 dist/（Vite 产物）
+#    npx electron-builder --win --x64
+#  产物落在 release/
+# =============================================================================
+
+appId: com.aistatuslight.app
+productName: AIStatusLight
+copyright: Copyright © 2026 AI Status Light
+
+directories:
+  output: release
+  buildResources: build
+
+# ---------------------------------------------------------------------------
+#  打包范围
+#  electron-builder 默认只收 dependencies，devDependencies（vite / tailwind /
+#  electron 本体）不会进包。这里额外把开发期的杂物排除干净。
+# ---------------------------------------------------------------------------
+files:
+  - main/**/*
+  - dist/**/*
+  - "assets/status-light.ico"
+  - "assets/logo-traffic-light.png"
+  - package.json
+  # ---------------------------------------------------------------------
+  #  注意：这里【故意不写】node_modules/**/*
+  #
+  #  electron-builder 的默认规则是只打包 dependencies，自动跳过
+  #  devDependencies。一旦显式写上 node_modules/**/*，就等于手动关掉了这个
+  #  过滤 —— 本项目 node_modules 实测 452MB，其中 electron 本体 260MB、
+  #  electron-winstaller 31MB、date-fns 21MB、vite/tailwind/@babel 若干。
+  #  全打进去的话绿色版会变成一个 300MB+ 的单文件怪物，U 盘都嫌大。
+  #
+  #  不写这一行，electron-builder 就会按 dependencies 自动收集，koffi 及其
+  #  平台二进制包（@koromix/koffi-win32-x64）都会被正确带上 —— 这是唯一
+  #  真正需要在运行时存在的原生依赖。
+  # ---------------------------------------------------------------------
+  - "!**/*.map"
+  - "!**/*.ts"
+  - "!**/node_modules/.bin/**/*"
+  - "!src/**/*"        # React 源码，已编译进 dist/
+  - "!tests/**/*"      # 测试脚本
+  - "!tools/**/*"      # 一次性探针脚本
+  - "!examples/**/*"
+  - "!fallback/**/*"
+  - "!assets/create_desktop_shortcut.js"
+  - "!assets/create_desktop_shortcut.ps1"
+  - "!assets/simulate_dblclick.js"
+  - "!assets/verify_shortcut.js"
+  - "!assets/make_ico.py"
+  - "!assets/make_logo.py"
+  - "!assets/icon-png/**/*"
+  - "!assets/App_icon_design__a_single_glow_*.png"
+  - "!**/*.md"
+  - "!**/*.py"
+  - "!error.log"
+  - "!build-check.txt" # 历史遗留垃圾文件
+  - "!syntax3.txt"     # 历史遗留垃圾文件
+
+# ---------------------------------------------------------------------------
+#  为什么 asar: false
+#
+#  koffi 的原生二进制在 node_modules/@koromix/koffi-win32-x64/win32_x64/
+#  koffi.node，而原生模块无法从 asar 归档里加载。虽然 electron-builder 会
+#  自动 asarUnpack *.node，但 koffi 是通过 require 整个 @koromix 包目录来
+#  解析的（见 node_modules/koffi/src/koffi/index.cjs 的 loadDynamic），目录
+#  结构和相对路径一旦被 asar 打乱就会加载失败。
+#
+#  这个应用要装到客户机器上，我们没有远程排障的机会。asar 带来的唯一好处
+#  是安装目录好看一点，而它换来的是一整类"在客户那里白屏、在我这里正常"的
+#  风险。这个交易不划算。等哪天在真机上验证过 asar 方案稳定了再打开。
+# ---------------------------------------------------------------------------
+asar: false
+
+# koffi 的 .node 是 NAPI 预编译产物，不需要也不应该触发 npm rebuild
+# （客户机器上没有 VS 生成工具，rebuild 必然失败）
+npmRebuild: false
+
+compression: maximum
+
+win:
+  icon: assets/status-light.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  artifactName: "AI状态灯-${version}-${arch}.${ext}"
+
+# ---------------------------------------------------------------------------
+#  安装包行为
+#
+#  perMachine: false 是刻意的 —— 装到当前用户的 %LOCALAPPDATA%\Programs 下，
+#  不需要管理员权限，客户双击就能装完，不会被 UAC 弹窗吓退，也不会因为公司
+#  电脑没管理员权限而装不上。
+#
+#  deleteAppDataOnUninstall: false 也是刻意的 —— 卸载时保留用户配置。客户
+#  重装或升级后，他加过的 AI 和灯的位置都还在，不用重新配一遍。
+# ---------------------------------------------------------------------------
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  shortcutName: "AI 状态灯"
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  menuCategory: false
+  deleteAppDataOnUninstall: false
+  displayLanguageSelector: false
+  language: "2052" # 简体中文安装界面
+  runAfterFinish: true
+
+portable:
+  artifactName: "AI状态灯-${version}-绿色版.${ext}"
+  requestExecutionLevel: user
+
+# ---------------------------------------------------------------------------
+#  自动更新发布源（v1.6.0 功能五）
+#
+#  electron-updater 按这里声明的 GitHub Releases 源查新版本。
+#  GO2DAY 是仓库 owner 占位 —— 正式发布前统一替换成真实 owner
+#  （与 main/remote-config.js、main/auto-updater.js 里的同名占位一起换）。
+#  绿色版不支持自更新：只用于「有新版本」横幅的 Release 页跳转。
+# ---------------------------------------------------------------------------
+publish:
+  - provider: github
+    owner: GO2DAY
+    repo: ai-status-light

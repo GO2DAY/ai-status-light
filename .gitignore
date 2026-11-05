@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+out/
+release-v*/
+win-unpacked/
+config.json
+*.log
+*.txt
+error.log
+asl-*.log
+build-v*.log
+doubao_assist_notify.py
+.workbuddy/
+.DS_Store

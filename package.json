@@ -1,0 +1,32 @@
+{
+  "name": "ai-status-light",
+  "version": "1.6.2",
+  "description": "AI Status Light - multi-AI traffic-light status overlay: local screen detection + MQTT cloud relay + bilingual (zh/en) settings panel",
+  "author": "ai-status-light contributors",
+  "main": "main/main.js",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && powershell -NoProfile -Command \\\"Remove-Item Env:ELECTRON_RUN_AS_NODE -EA SilentlyContinue; $env:ASL_DEV=1; & '.\\\\node_modules\\\\electron\\\\dist\\\\electron.exe' .\\\"\"",
+    "build": "vite build",
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item Env:ELECTRON_RUN_AS_NODE -EA SilentlyContinue; & '.\\node_modules\\electron\\dist\\electron.exe' .\"",
+    "fallback": "node fallback/server.js"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "koffi": "^3.1.6",
+    "mqtt": "^5.15.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.0",
+    "electron-builder": "^26.15.3",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "vite": "^5.3.1",
+    "wait-on": "^7.2.0"
+  }
+}
