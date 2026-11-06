@@ -31,13 +31,17 @@ Prefer the portable build? Just run `AI-Status-Light-Portable-1.6.2.exe` — not
 - **⚙️ Fully self-serve settings** — add/remove/edit lights, drag in a shortcut to add a new AI, manage the sound blacklist. No config files to hand-edit.
 - **📌 Always-on-top, drag anywhere** — a slim strip that stays out of your way until it matters.
 
-## 📸 Demo
+## 📸 UI preview
 
-![AI Status Light demo — one glance at every AI](assets/demo.gif)
+![AI Status Light — an always-on-top strip with one lamp per AI](assets/ui-en.png)
+
+*Illustrative recreation of the actual UI. Agent names and count are fully configurable — this strip shows a sample setup. Hover any lamp for status, current task and last heartbeat.*
+
+## 🎬 In motion
+
+![AI Status Light demo](assets/demo.gif)
 
 🟢 Running · 🟡 Idle / waiting · 🟣 Needs your input · 🔴 **Flashing** = stuck / needs help · ⚪ Offline
-
-*Static version: [poster.png](assets/poster.png)*
 
 ## ❓ FAQ
 
