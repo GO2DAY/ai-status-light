@@ -5,7 +5,7 @@
 Run several AI assistants in parallel (Claude Code, Kimi, DeepSeek, Doubao, Copilot and more)? Stop alt-tabbing to check on them. AI Status Light is a tiny always-on-top strip that shows one colored light per AI — green = working, yellow = idle, purple = needs you, flashing red = stuck, gray = offline.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.6.2-blue.svg)](https://github.com/GO2DAY/ai-status-light/releases)
+[![Release](https://img.shields.io/github/v/release/GO2DAY/ai-status-light)](https://github.com/GO2DAY/ai-status-light/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](https://github.com/GO2DAY/ai-status-light/releases)
 [![Built with Electron](https://img.shields.io/badge/built%20with-Electron-47848F.svg)](https://www.electronjs.org/)
 
@@ -15,18 +15,18 @@ Run several AI assistants in parallel (Claude Code, Kimi, DeepSeek, Doubao, Copi
 
 ## ⚡ 30-second quick start
 
-1. Download `ai-status-light-setup-1.6.2.exe` (installer) or `AI-Status-Light-Portable-1.6.2.exe` (portable, no install) from [Releases](https://github.com/GO2DAY/ai-status-light/releases).
+1. Download the latest `AIStatusLight-*-x64-Setup.exe` (installer) or `AIStatusLight-*-Portable.exe` (portable, no install) from [Releases](https://github.com/GO2DAY/ai-status-light/releases/latest).
 2. Double-click. A slim light strip docks to the top of your screen.
 3. Done. It **automatically discovers** the AI assistants already running on your machine and lights them up. No plugins, no API keys, no config.
 
-Prefer the portable build? Just run `AI-Status-Light-Portable-1.6.2.exe` — nothing is written to your system.
+Prefer the portable build? Just run the downloaded `AIStatusLight-*-Portable.exe` — nothing is written to your system.
 
 ## ✨ Features
 
 - **🔍 Zero-config auto-discovery** — detects 15+ AI assistants (Claude Code, Kimi, DeepSeek, Doubao, WorkBuddy, Copilot and more) by watching their windows and processes. No extension or plugin to install in the AI app.
 - **🧵 Thread-level conversation list** — not just "busy/idle". Each light tells you `2 chats · generating「topic title」`, so you know *which* conversation is running and what it's about.
 - **☁️ Cloud bridge (MQTT)** — running AI agents on a cloud PC or another machine? Publish their status over MQTT and they show up on your local light strip too.
-- **🚦 Five-state lights** — 🟢 working · 🟡 idle · 🟣 needs human input · 🔴 flashing = stuck · ⚫ offline.
+- **🚦 Five-state lights with status words** — 🟢 working · 🟡 idle · 🟣 needs human input · 🔴 flashing = stuck · ⚫ offline. Since v1.6.3 each lamp also prints its status word right under the AI's name — readable at a glance, no hovering.
 - **🔊 Sound alerts** — purple/red states trigger a repeating audible alert (every 30s, 3 volume levels, per-app blacklist) so you never miss an agent crying for help.
 - **⚙️ Fully self-serve settings** — add/remove/edit lights, drag in a shortcut to add a new AI, manage the sound blacklist. No config files to hand-edit.
 - **📌 Always-on-top, drag anywhere** — a slim strip that stays out of your way until it matters.

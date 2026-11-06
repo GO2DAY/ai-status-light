@@ -4,15 +4,15 @@
 
 现在用 AI 的常态是同时挂着好几个：DeepSeek 在写方案，Kimi 在整理资料，豆包在生成图片，Claude Code 在跑代码。问题是——它们不吭声。你得挨个切窗口回去看：跑完没？卡住了？还是正等你点"确认"？
 
-AI 状态灯是一个 Windows 置顶小灯条：**一个 AI 一盏灯**，🟢 干活中 · 🟡 空闲 · 🟣 等你处理 · 🔴 红闪 = 卡住 · ⚫ 离线。不用切窗口，余光一扫就知道哪个 AI 需要你了。
+AI 状态灯是一个 Windows 置顶小灯条：**一个 AI 一盏灯**，🟢 干活中 · 🟡 空闲 · 🟣 等你处理 · 🔴 红闪 = 卡住 · ⚫ 离线，灯下还直接标着状态词（v1.6.3 起）。不用切窗口，余光一扫就知道哪个 AI 需要你了。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.6.2-blue.svg)](https://github.com/GO2DAY/ai-status-light/releases)
+[![Release](https://img.shields.io/github/v/release/GO2DAY/ai-status-light)](https://github.com/GO2DAY/ai-status-light/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](https://github.com/GO2DAY/ai-status-light/releases)
 
 ## 30 秒上手
 
-1. 去 [Releases](https://github.com/GO2DAY/ai-status-light/releases) 下载 `ai-status-light-setup-1.6.2.exe`（安装版）或 `AI-Status-Light-Portable-1.6.2.exe`（绿色版，免安装）。
+1. 去 [Releases](https://github.com/GO2DAY/ai-status-light/releases/latest) 下载最新的 `AIStatusLight-*-x64-Setup.exe`（安装版）或 `AIStatusLight-*-Portable.exe`（绿色版，免安装）。
 2. 双击运行，屏幕顶部出现一条小灯条。
 3. 完事。它会**自动发现**你电脑上正在运行的 AI，直接亮灯——不装插件、不配 API、不用改任何设置。
 
