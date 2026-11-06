@@ -52,7 +52,12 @@ export default function App() {
   const [agents, setAgents] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settings, setSettings] = useState({ soundOn: true, soundVolume: 'high', repeatAlert: true });
+  const [settings, setSettings] = useState({
+    soundOn: true,
+    soundVolume: 'high',
+    repeatAlert: true,
+    showStatusText: true, // v1.6.3 灯下状态文字（缺省开）
+  });
   // v1.5.0 界面语言：状态存在这里只为触发重渲染（文案本身由 statusMeta
   // 模块级 currentLang 提供，setUiLanguage 先行再 setLanguage 触发重绘）。
   const [language, setLanguage] = useState('zh-CN');
@@ -390,14 +395,17 @@ export default function App() {
       onPointerCancel={handleDragPointerEnd}
       onContextMenu={handleContextMenu}
     >
-      {/* Light strip */}
-      <div className="flex h-14 items-stretch bg-[#111827]">
+      {/* Light strip — v1.6.3 行高 56→72px（h-14→h-[72px]）：灯下新增一行
+          状态词，主进程 ROW_HEIGHT 同步 56→72，两侧必须一致（拖动收起、
+          启动初始高都以 ROW_HEIGHT 为准）。 */}
+      <div className="flex h-[72px] items-stretch bg-[#111827]">
         <div className="flex items-center px-1.5">
           {agents.map((agent) => (
             <StatusLight
               key={agent.id}
               agent={agent}
               selected={agent.id === selectedId}
+              showStatusText={settings.showStatusText !== false}
             />
           ))}
           {agents.length === 0 ? (

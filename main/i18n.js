@@ -57,11 +57,19 @@
     'tip.status': '状态：',
     'tip.task': '任务：',
     'tip.heartbeat': '最后心跳：',
+    'tip.stale': '长时间未更新',
 
     // ---- 灯条 ----
     'strip.empty': '暂无 AI 源，点右侧 ⚙ 添加',
     'strip.gearAria': '设置',
     'strip.gearTitle': 'AI 源管理',
+    // v1.6.3 灯下状态文字：短词版状态文案（tooltip/详情用 status.* 长文案，
+    // 灯条 52px 宽度下只能放短词，故单独一套 key）
+    'strip.status.running': '运行中',
+    'strip.status.idle': '空闲',
+    'strip.status.stuck': '卡住',
+    'strip.status.assist': '等你处理',
+    'strip.status.offline': '离线',
 
     // ---- 详情面板（React） ----
     'detail.close': '关闭',
@@ -124,6 +132,9 @@
     'sw.switches': '开关',
     'sw.screenWatch': '画面检测',
     'sw.screenWatchDesc': '截屏比对各 AI 窗口内容，AI 生成回答时自动亮绿灯',
+    // v1.6.3 灯下状态文字开关（缺省开）
+    'sw.showStatusText': '灯下状态文字',
+    'sw.showStatusTextDesc': '每盏灯名称下方常显一行小字状态词（运行中/空闲/卡住/等你处理/离线），不用悬停就能看清',
     'sw.cloudRelay': '云端中转（MQTT）',
     'sw.cloudRelayDesc': '接收云电脑/服务器上 AI 的状态上报；只在本地用时可以关掉',
     'sw.mqttTopic': '云端主题',
@@ -264,10 +275,17 @@
     'tip.status': 'Status: ',
     'tip.task': 'Task: ',
     'tip.heartbeat': 'Last heartbeat: ',
+    'tip.stale': 'Not updated for a while',
 
     'strip.empty': 'No AI sources yet — click ⚙ to add',
     'strip.gearAria': 'Settings',
     'strip.gearTitle': 'Manage AI sources',
+    // v1.6.3 status text under lights (short words — strip is only 52px wide)
+    'strip.status.running': 'Running',
+    'strip.status.idle': 'Idle',
+    'strip.status.stuck': 'Stuck',
+    'strip.status.assist': 'Waiting',
+    'strip.status.offline': 'Offline',
 
     'detail.close': 'Close',
     'detail.status': 'Status',
@@ -327,6 +345,9 @@
     'sw.switches': 'Switches',
     'sw.screenWatch': 'Screen detection',
     'sw.screenWatchDesc': 'Compares AI window screenshots; the light turns green while the AI is generating',
+    // v1.6.3 status text under lights (default on)
+    'sw.showStatusText': 'Status text under lights',
+    'sw.showStatusTextDesc': 'Always shows a short status word under each light name (Running / Idle / Stuck / Waiting / Offline) — no hovering needed',
     'sw.cloudRelay': 'Cloud relay (MQTT)',
     'sw.cloudRelayDesc': 'Receives status reports from AIs on cloud machines/servers; turn off for local-only use',
     'sw.mqttTopic': 'Cloud topic',

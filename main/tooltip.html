@@ -53,7 +53,7 @@
     </div>
     <div class="row"><span id="statusLabel">状态：</span><span id="status">-</span><span id="auto" class="muted"></span></div>
     <div class="row task" id="taskRow" style="display:none"><span id="taskLabel">任务：</span><span id="task"></span></div>
-    <div class="row muted"><span id="heartbeatLabel">最后心跳：</span><span id="heartbeat">-</span></div>
+    <div class="row muted"><span id="heartbeatLabel">最后心跳：</span><span id="heartbeat">-</span><span id="stale" class="muted"></span></div>
   </div>
 
   <script src="i18n.js"></script>
@@ -99,6 +99,8 @@
         taskRow.style.display = 'none';
       }
       document.getElementById('heartbeat').textContent = relTime(agent.lastHeartbeat);
+      // 纯提示：主进程快照标记心跳久未更新时追加文案，不改状态
+      document.getElementById('stale').textContent = agent.stale ? ' · ' + t('tip.stale') : '';
     }
 
     window.tooltipApi.onData(render);

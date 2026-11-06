@@ -238,6 +238,8 @@ function validateSettingsPayload(payload) {
       soundOn: boolOr(payload.soundOn, true),
       soundVolume: SOUND_VOLUMES.includes(payload.soundVolume) ? payload.soundVolume : 'high',
       repeatAlert: boolOr(payload.repeatAlert, true),
+      // v1.6.3 灯下状态文字（缺省 true = 显示）；设置窗口面板总是显式回传
+      showStatusText: boolOr(payload.showStatusText, true),
       autoDiscover: boolOr(payload.autoDiscover, true),
       // v1.5.0 脱敏：云端中转出厂默认关闭（公共 broker 不应默认连）；
       // 面板始终显式传值，这里的缺省只兜老调用方/手动构造的 payload。

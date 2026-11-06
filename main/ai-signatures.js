@@ -175,10 +175,31 @@ function findNewDiscoveries({ procNames, windowTitles, existingIds, blacklist, s
   return out;
 }
 
+/**
+ * 自动发现新 AI 时的初始基础状态（纯函数，可单测）。
+ *
+ * 关键：不再凭空写 status:'idle' + lastHeartbeat: Date.now() —— 那会让刚发现、
+ * 进程从未上线、也从未主动上报过的 AI 显示成「空闲/等待 · 11 小时前」的
+ * 僵尸黄灯。默认 offline + 心跳 0（未上报），由 agent-watcher 真正检测到
+ * 进程/活动后再点亮。
+ * origin / discoveredAt 仍由 main.js 的 handleAutoDiscover 无条件打标（设置
+ * 面板删除豁免判定），保留原有语义与源码锚点。
+ */
+function discoveredAgentState(sig) {
+  return {
+    id: sig.id,
+    name: sig.name || sig.id,
+    status: 'offline',
+    task: '新发现·待确认',
+    lastHeartbeat: 0,
+  };
+}
+
 module.exports = {
   AI_SIGNATURES,
   EXCLUDE_SUFFIXES,
   isWindowKeywordTrusted,
   signatureMatches,
   findNewDiscoveries,
+  discoveredAgentState,
 };

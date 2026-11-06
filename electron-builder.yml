@@ -129,11 +129,11 @@ portable:
 #  自动更新发布源（v1.6.0 功能五）
 #
 #  electron-updater 按这里声明的 GitHub Releases 源查新版本。
-#  GO2DAY 是仓库 owner 占位 —— 正式发布前统一替换成真实 owner
+#  TODO-GITHUB-OWNER 是仓库 owner 占位 —— 正式发布前统一替换成真实 owner
 #  （与 main/remote-config.js、main/auto-updater.js 里的同名占位一起换）。
 #  绿色版不支持自更新：只用于「有新版本」横幅的 Release 页跳转。
 # ---------------------------------------------------------------------------
 publish:
   - provider: github
-    owner: GO2DAY
+    owner: TODO-GITHUB-OWNER
     repo: ai-status-light

@@ -41,39 +41,57 @@ export function t(key, params) {
 export const STATUS_META = {
   running: {
     labelKey: 'status.running',
+    // v1.6.3 灯下状态文字：文字色与灯色一致（弱化但可读）
+    text: 'text-green-400',
     dot: 'bg-green-500',
     ring: 'ring-green-500/40',
     glow: 'shadow-[0_0_8px_2px_rgba(34,197,94,0.55)]',
   },
   idle: {
     labelKey: 'status.idle',
+    text: 'text-yellow-300',
     dot: 'bg-yellow-400',
     ring: 'ring-yellow-400/40',
     glow: 'shadow-[0_0_8px_2px_rgba(250,204,21,0.45)]',
   },
   stuck: {
     labelKey: 'status.stuck',
+    text: 'text-red-400',
     dot: 'bg-red-500 animate-blink',
     ring: 'ring-red-500/40',
     glow: 'shadow-[0_0_10px_3px_rgba(239,68,68,0.6)]',
   },
   assist: {
     labelKey: 'status.assist',
+    text: 'text-purple-300',
     dot: 'bg-purple-500 animate-blink',
     ring: 'ring-purple-400/50',
     glow: 'shadow-[0_0_12px_4px_rgba(168,85,247,0.7)]',
   },
   offline: {
     labelKey: 'status.offline',
+    text: 'text-gray-400',
     dot: 'bg-gray-500',
     ring: 'ring-gray-500/30',
     glow: '',
   },
 };
 
-/** 状态文案（当前语言）。 */
+/** 状态文案（当前语言，tooltip/详情面板用长文案）。 */
 export function statusLabel(status) {
   return t(`status.${status || 'offline'}`);
+}
+
+/**
+ * 灯下状态文字（v1.6.3）：短词版文案，专用于灯条 52px 窄空间。
+ * 五态映射走独立 key（strip.status.*），缺省/未知状态回退 offline。
+ * stuck/assist 的文字刻意不闪——圆灯已带 animate-blink，文字再闪整条
+ * 都在动，扫一眼反而抓不住重点。
+ * @param {string} status
+ * @returns {string}
+ */
+export function stripStatusText(status) {
+  return t(`strip.status.${status || 'offline'}`);
 }
 
 /**

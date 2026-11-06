@@ -22,17 +22,20 @@
 const fs = require('fs');
 const path = require('path');
 
-/** 拉取候选 URL（按序尝试）。GO2DAY 发布前统一替换。 */
+/** 拉取候选 URL（按序尝试）。TODO-GITHUB-OWNER 发布前统一替换。 */
 const AUTHOR_CONFIG_URLS = [
-  'https://cdn.jsdelivr.net/gh/GO2DAY/ai-status-light@main/author-config.json',
-  'https://raw.githubusercontent.com/GO2DAY/ai-status-light/main/author-config.json',
+  'https://cdn.jsdelivr.net/gh/TODO-GITHUB-OWNER/ai-status-light@main/author-config.json',
+  'https://raw.githubusercontent.com/TODO-GITHUB-OWNER/ai-status-light/main/author-config.json',
 ];
 
 /** 内置默认值：无网/无缓存时的兜底（与仓库根 author-config.json 一致）。 */
 const DEFAULT_AUTHOR_CONFIG = {
   version: 1,
   presetsUpdatedAt: '2026-10-20',
-  contactEmail: 'author@example.com', // 占位：真实邮箱日后只改远程 JSON
+  // v1.6.3 漂移锁修复：与仓库根 author-config.json 同步真实邮箱。
+  // 铁律：本常量与 author-config.json 必须逐字段一致，改一边必红
+  //（tests/remote-config.test.js + tests/qa-v160-adversarial.test.js 双锁）。
+  contactEmail: 'zekaiwu747@gmail.com',
   kofiUrl: 'https://ko-fi.com/go2day',
   afdianUrl: '',
   promo: { enabled: false, text: '', textEn: '', url: '' },

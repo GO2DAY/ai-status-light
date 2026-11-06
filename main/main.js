@@ -21,14 +21,22 @@ const os = require('os');
 const path = require('path');
 
 /** 应用版本号（窗口标题/语言包插值共用，升级只改这里）。 */
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.6.3';
 
 const HTTP_PORT = 17890;
 const HTTP_HOST = '127.0.0.1';
 const HEARTBEAT_IDLE_MS = 60_000;
 const HEARTBEAT_OFFLINE_MS = 300_000;
+// tooltip 纯提示阈值：idle 且心跳超过 5 分钟时输出 stale: true。
+// 数值与 HEARTBEAT_OFFLINE_MS 相同，但语义完全不同 —— 只加提示字段，
+// 绝不把后台干活、稀疏上报的 AI / MQTT 云 AI 判成 offline（下一版再评估）。
+const STALE_IDLE_MS = 5 * 60 * 1000;
 const TICK_MS = 5_000;
-const ROW_HEIGHT = 56;
+// v1.6.3：56 → 72。灯下新增一行状态词（9px 字 + 1px 间距 = +11px），
+// 原 56px 里名称两行（22px）+ 灯（20px）+ 间距已接近满高，16px 余量
+// 保证 assist 大灯（20px）+ 名称两行 + 状态词不裁切。
+// 渲染层 App.jsx 的 h-14 → h-[72px] 必须同步改（两侧只差会裁内容或露底）。
+const ROW_HEIGHT = 72;
 const LIGHT_WIDTH = 56;
 const SIDE_PADDING = 12;
 const SETTINGS_WIDTH = 32;
@@ -202,7 +210,8 @@ let saveTimer = null;
 // soundVolume: 提示音音量档位 low/medium/high（v1.4.0，默认 high）
 // repeatAlert: 紫灯(assist)/红灯(stuck) 每 30s 重复提醒直到 ack/解除（v1.4.0，默认开）
 // language: 界面语言 auto/zh-CN/en-US（v1.5.0，默认 auto=跟随系统 locale）
-let settings = { soundOn: true, soundVolume: 'high', repeatAlert: true, language: 'auto' };
+// showStatusText: 灯下状态文字（v1.6.3，老吴需求，默认开——不悬停扫一眼可见）
+let settings = { soundOn: true, soundVolume: 'high', repeatAlert: true, showStatusText: true, language: 'auto' };
 
 /**
  * 生成每台机器唯一的 MQTT 主题前缀（v1.5.0 脱敏）：asl/ + 12 位随机 hex。
@@ -292,6 +301,10 @@ function loadConfig() {
     }
     if (raw.settings && typeof raw.settings.repeatAlert === 'boolean') {
       settings.repeatAlert = raw.settings.repeatAlert;
+    }
+    // v1.6.3 灯下状态文字开关（缺省 true = 显示；老配置无此键行为不变）
+    if (raw.settings && typeof raw.settings.showStatusText === 'boolean') {
+      settings.showStatusText = raw.settings.showStatusText;
     }
     // v1.5.0 界面语言（auto/zh-CN/en-US；非法值按 auto 跟随系统）
     if (raw.settings && typeof raw.settings.language === 'string') {
@@ -408,6 +421,10 @@ function serializeAgents() {
   const dialogsMap = agentWatcher.getDialogs ? agentWatcher.getDialogs() : {};
   return Array.from(agents.values()).map((a) => {
     const status = effectiveStatus(a, now);
+    // 纯提示字段：idle 且心跳超过 5 分钟时让 tooltip 显示「长时间未更新」。
+    // 只加提示，不改 status、不触发任何降级（避免误伤稀疏上报的 AI）。
+    const stale =
+      status === 'idle' && a.lastHeartbeat > 0 && now - a.lastHeartbeat > STALE_IDLE_MS;
     return {
       id: a.id,
       name: a.name,
@@ -416,6 +433,7 @@ function serializeAgents() {
       task: a.task,
       lastHeartbeat: a.lastHeartbeat,
       dialogs: dialogsMap[a.id] || [],
+      ...(stale ? { stale: true } : {}),
     };
   });
 }
@@ -1330,12 +1348,11 @@ function handleAutoDiscover({ procNames, windowTitles }) {
     const discovered = [];
     for (const sig of fresh) {
       if (agents.size >= MAX_AGENTS) break;
+      // 初始状态：offline + 心跳 0（未上报），不凭空给新鲜心跳 / 不一点亮就黄灯。
+      // 基础状态构造收在 ai-signatures.discoveredAgentState（纯函数，可单测）；
+      // origin/discoveredAt 仍在此处无条件打标，保持设置面板删除豁免语义。
       agents.set(sig.id, {
-        id: sig.id,
-        name: sig.name,
-        status: 'idle',
-        task: '新发现·待确认',
-        lastHeartbeat: Date.now(),
+        ...aiSignatures.discoveredAgentState(sig),
         origin: 'auto', // v1.4.1：设置面板删除豁免判定 + 落盘持久化
         discoveredAt: Date.now(),
       });
@@ -1922,6 +1939,8 @@ ipcMain.handle('settingsPanel:get', () => ({
     ? settings.soundVolume
     : 'high',
   repeatAlert: settings.repeatAlert !== false,
+  // v1.6.3 灯下状态文字开关（缺省开）
+  showStatusText: settings.showStatusText !== false,
   autoDiscover: configExtra.autoDiscover !== false,
   cloudRelay: currentConfigCloudRelay() === true,
   // v1.5.0：语言（原始设置值 + 已解析值）与每台机器随机 MQTT 主题
@@ -2009,6 +2028,8 @@ ipcMain.handle('settingsPanel:save', (_event, payload) => {
   settings.soundOn = value.soundOn;
   settings.soundVolume = value.soundVolume;
   settings.repeatAlert = value.repeatAlert;
+  // v1.6.3 灯下状态文字开关（面板总是显式回传）
+  settings.showStatusText = value.showStatusText;
   configExtra.cloudRelay = value.cloudRelay;
   configExtra.screenWatch = value.screenWatch;
   configExtra.openAtLogin = value.openAtLogin;

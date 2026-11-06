@@ -18,8 +18,8 @@
  * 到 GitHub 后真人验证一次。
  */
 
-/** Releases 页（绿色版横幅点击跳转）。GO2DAY 发布前统一替换。 */
-const RELEASES_URL = 'https://github.com/GO2DAY/ai-status-light/releases';
+/** Releases 页（绿色版横幅点击跳转）。TODO-GITHUB-OWNER 发布前统一替换。 */
+const RELEASES_URL = 'https://github.com/TODO-GITHUB-OWNER/ai-status-light/releases';
 
 /** 首次检查延迟（启动后 30 秒，避开启动高峰）。 */
 const FIRST_CHECK_DELAY_MS = 30_000;

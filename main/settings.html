@@ -355,6 +355,14 @@
         <div class="desc" id="descRepeatAlert"></div>
       </span>
     </label>
+    <!-- v1.6.3：灯下状态文字开关（缺省开） -->
+    <label class="switch-row">
+      <input type="checkbox" id="swShowStatusText" />
+      <span>
+        <span class="label" id="lbShowStatusText"></span>
+        <div class="desc" id="descShowStatusText"></div>
+      </span>
+    </label>
     <label class="switch-row">
       <input type="checkbox" id="swAutoDiscover" />
       <span>
@@ -504,6 +512,9 @@
       volHigh: 'sw.volHigh',
       lbRepeatAlert: 'sw.repeatAlert',
       descRepeatAlert: 'sw.repeatAlertDesc',
+      // v1.6.3：灯下状态文字开关
+      lbShowStatusText: 'sw.showStatusText',
+      descShowStatusText: 'sw.showStatusTextDesc',
       lbAutoDiscover: 'sw.autoDiscover',
       descAutoDiscover: 'sw.autoDiscoverDesc',
       lbOpenAtLogin: 'sw.openAtLogin',
@@ -936,6 +947,8 @@
       soundOn: document.getElementById('swSoundOn').checked,
       soundVolume: getVolume(),
       repeatAlert: document.getElementById('swRepeatAlert').checked,
+      // v1.6.3：灯下状态文字（总是显式回传，主进程据此覆盖）
+      showStatusText: document.getElementById('swShowStatusText').checked,
       autoDiscover: document.getElementById('swAutoDiscover').checked,
       cloudRelay: document.getElementById('swCloudRelay').checked,
       screenWatch: document.getElementById('swScreenWatch').checked,
@@ -1198,6 +1211,8 @@
     document.getElementById('swSoundOn').checked = cfg.soundOn !== false;
     setVolume(cfg.soundVolume === 'low' || cfg.soundVolume === 'medium' ? cfg.soundVolume : 'high');
     document.getElementById('swRepeatAlert').checked = cfg.repeatAlert !== false;
+    // v1.6.3：灯下状态文字（缺省开）
+    document.getElementById('swShowStatusText').checked = cfg.showStatusText !== false;
     document.getElementById('swAutoDiscover').checked = cfg.autoDiscover !== false;
     document.getElementById('swCloudRelay').checked = cfg.cloudRelay === true;
     document.getElementById('swScreenWatch').checked = cfg.screenWatch !== false;

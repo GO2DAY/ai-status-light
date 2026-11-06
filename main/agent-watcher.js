@@ -309,6 +309,9 @@ function loadWatchers() {
     // 总开关：config.json 里 "screenWatch": false 可整条关掉画面通道
     // （例如客户机器上桌面捕获被安全软件拦截时的一键回退）。
     screenWatchEnabled = data.screenWatch !== false;
+    // 严格绿灯开关：只有显式写 "strictRunning": false 才回退旧行为。
+    // 未知顶层键由 settings-ops.extractConfigExtras 原样保留，写回不会被冲掉。
+    strictRunning = data.strictRunning !== false;
     const seen = new Set();
     const out = [];
     for (const w of data.watchers || []) {
@@ -349,11 +352,12 @@ function workbuddyTaskString(titles) {
 // 状态机
 // ===========================================================================
 
-/** @type {{online: boolean, fgSince: number, last: string|null, cpuPrev: number|null, cpuPrevT: number, hot: number, cool: number, cpuRate: number, screenPrevMap: Map|null, screenActiveT: number, screenWinCount: number, screenDialog: string, screenWindows: Map|null}} */
+/** @type {{online: boolean, fgSince: number, fgHit: boolean, last: string|null, cpuPrev: number|null, cpuPrevT: number, hot: number, cool: number, cpuRate: number, screenPrevMap: Map|null, screenActiveT: number, screenWinCount: number, screenDialog: string, screenWindows: Map|null}} */
 function newState() {
   return {
     online: false,
     fgSince: 0,
+    fgHit: false, // 本轮是否前台命中（严格模式仅用于 running 文案）
     last: null,
     cpuPrev: null,
     cpuPrevT: 0,
@@ -374,6 +378,9 @@ let wbPrev = 0; // 上一次查到的 working 会话数
 let wbBusy = false; // 数据库查询重入保护
 let screenBusy = false; // 画面通道重入保护（getSources 是异步的）
 let screenWatchEnabled = true; // config.json "screenWatch": false 可关闭通道 E
+// 严格绿灯开关（本次修复）：config.json "strictRunning": false 可一键回退旧行为
+// （前台命中即绿）。缺省 true = 绿色必须带实际活动信号。
+let strictRunning = true;
 let screenEnumLogged = false; // 窗口枚举清单只打一次日志，避免刷屏
 
 /** electron.desktopCapturer 惰性加载（模块在 app ready 前就被 require）。 */
@@ -386,11 +393,14 @@ function desktopCapturer() {
 }
 
 /**
- * 两帧 BGRA 位图的采样差异率（0~1）。长度不一致按完全不同处理（调用方
- * 会据此判活跃 —— 尺寸变化本身就说明窗口重排/内容大变）。
+ * 两帧 BGRA 位图的采样差异率（0~1）。
+ * 帧尺寸变化（窗口缩放/登录弹窗）不再当作「画面活跃」：返回 0，且调用方
+ * tickScreen 随后无条件用当前帧覆盖 screenPrevMap 基线（即重置基线），
+ * 下一轮起按新尺寸正常比对。旧实现返回 1 会把一次性重排误判成绿灯。
  */
 function screenDiffRatio(prev, cur) {
-  if (!prev || !cur || prev.length !== cur.length || cur.length === 0) return 1;
+  if (!prev || !cur || cur.length === 0) return 0;
+  if (prev.length !== cur.length) return 0; // 尺寸变化：重置基线，不判活跃
   const strideBytes = SCREEN_SAMPLE_STRIDE * 4; // BGRA 每像素 4 字节
   let changed = 0;
   let sampled = 0;
@@ -520,12 +530,115 @@ function dialogName(title) {
   return t.slice(0, 24);
 }
 
+/**
+ * 第三个活动信号：窗口标题里是否含会话/任务名（复用 dialogName 剥应用名后缀）。
+ * 优先用逐窗口列表（窗口关闭时 tickScreen 会清理，不残留旧标题）；没有窗口
+ * 列表（screenWatch 关闭 / 未配 window 关键词）时退回整体对话主题。纯函数，可单测。
+ */
+function hasSessionTitleSignal(screenWindows, screenDialog) {
+  if (screenWindows instanceof Map && screenWindows.size > 0) {
+    for (const entry of screenWindows.values()) {
+      if (entry && dialogName(entry.title) !== '') return true;
+    }
+    return false;
+  }
+  return dialogName(screenDialog) !== '';
+}
+
+/**
+ * 融合前台/CPU/画面/会话标题信号，决定本轮是否切换灯态（纯函数，可单测）。
+ *
+ * 严格模式（默认）：绿色 = 在线 ∧ 有实际活动信号（cpuHot || screenHot ||
+ * hasSessionTitle）。前台命中只影响 running 文案，不再单独点绿；没有活动信号
+ * 且当前是 running 则回落 idle。
+ *
+ * strictRunning === false：逐字复现旧行为（前台去抖即绿、CPU/画面「或」关系、
+ * 冷却期满才回落 idle），保证一键回退。
+ *
+ * @returns {{status: string, task: string} | null} null = 本轮不产生上报
+ */
+function decideFastStatus(opts) {
+  const { strictRunning: strict, st, fgHit, fgDebounced, cpuHot, screenHot, hasSessionTitle } = opts;
+  const last = st.last;
+
+  if (strict === false) {
+    // === 旧行为（可回退）===
+    if (fgHit) {
+      // 前台命中是充分条件；旧代码在此 continue 跳过 D/E（由 tickFast 处理）。
+      return fgDebounced && last !== 'running'
+        ? { status: 'running', task: '前台使用中' }
+        : null;
+    }
+    if ((cpuHot || screenHot) && last !== 'running') {
+      const dlgPrefix = st.screenWinCount > 1 ? `${st.screenWinCount}对话·` : '';
+      const dlgSuffix = st.screenDialog ? `「${st.screenDialog}」` : '';
+      return {
+        status: 'running',
+        task: screenHot
+          ? `${dlgPrefix}生成中${dlgSuffix}`
+          : `后台计算中 CPU${Math.round(st.cpuRate * 100)}%`,
+      };
+    }
+    if (!cpuHot && !screenHot && st.cool >= CPU_COOL_ROUNDS && last === 'running') {
+      return {
+        status: 'idle',
+        task: st.screenWinCount > 0 ? `桌面端在线·${st.screenWinCount}对话` : '桌面端在线',
+      };
+    }
+    return null;
+  }
+
+  // === 新行为（默认）：绿色必须带实际活动信号 ===
+  const activity = cpuHot || screenHot || hasSessionTitle;
+  if (activity && last !== 'running') {
+    return { status: 'running', task: fgHit ? '前台使用中' : '后台运行中' };
+  }
+  if (!activity && last === 'running') {
+    return { status: 'idle', task: '已打开·未在工作' };
+  }
+  return null;
+}
+
+/**
+ * 「进程从未上线且从未上报」的 agent 是否要补一次 offline 上报（纯函数）。
+ * 补一次把心跳从「发现时刻」纠正为 0（未上报），消除僵尸黄灯；调用方把
+ * st.last 置为 'offline' 后本函数恒为 false，不会每轮重复发。
+ */
+function shouldPostOfflineForUnknown(online, last) {
+  return !online && last === null;
+}
+
+/** 通道 D：采样 CPU 并累计 hot/cool（有副作用，供两条路径共用）。 */
+function sampleCpu(st, proc, now) {
+  let cur = 0;
+  try {
+    cur = win32.cpuSeconds(win32.imagePids(proc));
+  } catch (err) {
+    cur = st.cpuPrev === null ? 0 : st.cpuPrev;
+  }
+  if (st.cpuPrev !== null) {
+    const dt = Math.max(now - st.cpuPrevT, 0.5);
+    st.cpuRate = (cur - st.cpuPrev) / dt; // 单位：核数（该应用全部 PID 之和）
+  }
+  st.cpuPrev = cur;
+  st.cpuPrevT = now;
+  if (st.cpuRate >= CPU_HOT_CORES) {
+    st.hot += 1;
+    st.cool = 0;
+  } else {
+    st.hot = 0;
+    st.cool += 1;
+  }
+}
+
 /** 前台 + CPU 通道（每 2 秒）。 */
 function tickFast() {
   const now = Date.now() / 1000;
   const fg = win32.foregroundProcessName();
+  const watchers = loadWatchers();
+  const strict = strictRunning; // loadWatchers() 已按 config.json 更新
 
-  for (const w of loadWatchers()) {
+  for (const w of watchers) {
     const agent = w.agent;
     const proc = String(w.process).toLowerCase();
     if (!state.has(agent)) state.set(agent, newState());
@@ -537,6 +650,7 @@ function tickFast() {
       // 否则新起的进程会把旧进程的累计 CPU 算成一次暴涨）。
       st.online = online;
       st.fgSince = 0;
+      st.fgHit = false;
       st.cpuPrev = null;
       st.hot = 0;
       st.cool = CPU_COOL_ROUNDS;
@@ -554,70 +668,73 @@ function tickFast() {
       }
       continue;
     }
-    if (!online) continue;
-
-    // --- 通道 C：前台命中（最即时，但只能覆盖一个窗口）---
-    if (fg === proc) {
-      st.fgSince = st.fgSince || now;
-      if (now - st.fgSince >= FG_DEBOUNCE_S && st.last !== 'running') {
-        post(agent, 'running', '前台使用中');
-        st.last = 'running';
+    if (!online) {
+      // 自动发现/手动新增的 agent 可能「进程从未上线且从未上报」：旧代码这里
+      // 直接 continue，一次 /status 都不发，心跳永久冻结在发现时刻。补一次
+      // offline（st.last 置位后不再重复），把心跳纠正为「未上报」。
+      if (shouldPostOfflineForUnknown(online, st.last)) {
+        post(agent, 'offline', '桌面端离线');
+        st.last = 'offline';
       }
-      st.hot = 0; // 已经绿了，CPU 计数归零
-      st.cool = CPU_COOL_ROUNDS;
       continue;
     }
 
-    // --- 通道 D：CPU 负载（双屏/后台计算场景）---
-    st.fgSince = 0;
-    let cur = 0;
-    try {
-      cur = win32.cpuSeconds(win32.imagePids(proc));
-    } catch (err) {
-      cur = st.cpuPrev === null ? 0 : st.cpuPrev;
-    }
-    if (st.cpuPrev !== null) {
-      const dt = Math.max(now - st.cpuPrevT, 0.5);
-      st.cpuRate = (cur - st.cpuPrev) / dt; // 单位：核数（该应用全部 PID 之和）
-    }
-    st.cpuPrev = cur;
-    st.cpuPrevT = now;
+    const fgHit = fg === proc;
+    st.fgHit = false; // 每轮重置
 
-    if (st.cpuRate >= CPU_HOT_CORES) {
-      st.hot += 1;
-      st.cool = 0;
+    if (!strict && fgHit) {
+      // === 旧行为（strictRunning:false）：前台命中即充分条件，跳过 D/E ===
+      st.fgSince = st.fgSince || now;
+      const decision = decideFastStatus({
+        strictRunning: false,
+        st,
+        fgHit: true,
+        fgDebounced: now - st.fgSince >= FG_DEBOUNCE_S,
+        cpuHot: false,
+        screenHot: false,
+        hasSessionTitle: false,
+      });
+      if (decision) {
+        post(agent, decision.status, decision.task);
+        st.last = decision.status;
+      }
+      st.hot = 0; // 已经绿了，CPU 计数归零（旧行为）
+      st.cool = CPU_COOL_ROUNDS;
+      debug(`${agent} fg=true online=${online} rate=${st.cpuRate.toFixed(2)} hot=${st.hot} cool=${st.cool} screen=false last=${st.last}`);
+      continue;
+    }
+
+    // 严格模式：前台只记录上下文/文案，不再清零 hot/cool，也不再 continue ——
+    // 让 D（CPU）与 E（画面）在同一轮正常执行。
+    if (fgHit) {
+      st.fgSince = st.fgSince || now;
+      st.fgHit = true;
     } else {
-      st.hot = 0;
-      st.cool += 1;
+      st.fgSince = 0;
     }
 
-    // --- 通道 E 融合：画面活跃信号由 tickScreen 异步维护（screenActiveT）---
-    // 与 CPU 通道是"或"关系：任一热 = running；都冷且冷却期满 = idle。
+    sampleCpu(st, proc, now);
+
     const screenHot =
       st.screenActiveT > 0 && Date.now() - st.screenActiveT <= SCREEN_ACTIVE_TTL_MS;
     if (screenHot) st.cool = 0; // 画面还在变，绝不允许 CPU 冷却把灯打灰
     const cpuHot = st.hot >= CPU_HOT_ROUNDS;
-    // 线程级文案：N对话·生成中「对话主题」——一眼看清几个并行对话、在干什么
-    const dlgPrefix = st.screenWinCount > 1 ? `${st.screenWinCount}对话·` : '';
-    const dlgSuffix = st.screenDialog ? `「${st.screenDialog}」` : '';
-    if ((cpuHot || screenHot) && st.last !== 'running') {
-      post(
-        agent,
-        'running',
-        screenHot
-          ? `${dlgPrefix}生成中${dlgSuffix}`
-          : `后台计算中 CPU${Math.round(st.cpuRate * 100)}%`
-      );
-      st.last = 'running';
-    } else if (!cpuHot && !screenHot && st.cool >= CPU_COOL_ROUNDS && st.last === 'running') {
-      post(
-        agent,
-        'idle',
-        st.screenWinCount > 0 ? `桌面端在线·${st.screenWinCount}对话` : '桌面端在线'
-      );
-      st.last = 'idle';
+    const hasSessionTitle = hasSessionTitleSignal(st.screenWindows, st.screenDialog);
+
+    const decision = decideFastStatus({
+      strictRunning: strict,
+      st,
+      fgHit,
+      fgDebounced: false,
+      cpuHot,
+      screenHot,
+      hasSessionTitle,
+    });
+    if (decision) {
+      post(agent, decision.status, decision.task);
+      st.last = decision.status;
     }
-    debug(`${agent} fg=${fg === proc} online=${online} rate=${st.cpuRate.toFixed(2)} hot=${st.hot} cool=${st.cool} screen=${screenHot} last=${st.last}`);
+    debug(`${agent} fg=${fgHit} online=${online} rate=${st.cpuRate.toFixed(2)} hot=${st.hot} cool=${st.cool} screen=${screenHot} title=${hasSessionTitle} last=${st.last}`);
   }
 }
 
@@ -823,5 +940,15 @@ module.exports = {
   getDialogs,
   formatScreenDialogs,
   // v1.6.2 测试钩子：纯函数/可注入句柄的内部件，外部勿用
-  __test: { buildWorkingTitlesSql, tableHasColumn, queryWorkingTitlesFromDb, sqlite },
+  __test: {
+    buildWorkingTitlesSql,
+    tableHasColumn,
+    queryWorkingTitlesFromDb,
+    sqlite,
+    dialogName,
+    screenDiffRatio,
+    hasSessionTitleSignal,
+    decideFastStatus,
+    shouldPostOfflineForUnknown,
+  },
 };
