@@ -31,9 +31,13 @@ Prefer the portable build? Just run `AI-Status-Light-Portable-1.6.2.exe` — not
 - **⚙️ Fully self-serve settings** — add/remove/edit lights, drag in a shortcut to add a new AI, manage the sound blacklist. No config files to hand-edit.
 - **📌 Always-on-top, drag anywhere** — a slim strip that stays out of your way until it matters.
 
-## 📸 Screenshots
+## 📸 Demo
 
-> Screenshots and a demo GIF are on the way — check the [Releases](https://github.com/GO2DAY/ai-status-light/releases) page and the demo video for a live look.
+![AI Status Light demo — one glance at every AI](assets/demo.gif)
+
+🟢 Running · 🟡 Idle / waiting · 🟣 Needs your input · 🔴 **Flashing** = stuck / needs help · ⚪ Offline
+
+*Static version: [poster.png](assets/poster.png)*
 
 ## ❓ FAQ
 
