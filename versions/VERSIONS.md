@@ -364,7 +364,7 @@
 
 **变更**（老吴需求：72px 灯条遮挡屏幕内容，先做迷你聚合灯，迭代中升级为三档模式）：
 - **三档显示模式**：config.settings 新增 `displayMode`（classic/compact/mini，缺省 classic，非法值兜底 classic）。classic=v1.6.3 现状（灯+名称+状态词，72px）完全不动；compact（精简）=灯+完整名称、去状态词行，行高收 56px（v1.6.2 视觉，主进程新增 `ROW_HEIGHT_COMPACT=56` 与渲染层 `h-[56px]` 两侧同步）；mini（迷你）=整窗收成一盏聚合小灯（窗口 40×40px、圆灯 20px，来自新纯函数模块 main/mini-mode.js 的 MINI_WINDOW/MINI_LIGHT_SIZE），几乎不遮挡内容
-- **迷你聚合优先级**：assist(紫闪) > stuck(红闪) > running(绿闪) > idle(绿不闪) > 全 offline(灰兜底)——老吴拍板「正常时只看绿/红/紫」，idle 归绿不闪、不单独做黄色。聚合纯函数 `aggregateStatus` 在 main/mini-mode.js（UMD 双通道，node 可单测）；running/idle 的闪烁差异由渲染层 MiniLight.jsx 的 MINI_DOT_META 区分（classic 面板的 running 本就不闪，迷你灯单独一张色表）
+- **迷你聚合优先级**：assist(紫闪) > stuck(红闪) > running(绿闪) > idle(黄不闪) > 全 offline(灰兜底)。~~原口径 idle 归绿~~ → **rev3 修正（老吴实测反馈）**：idle 归绿导致「迷你灯绿、展开后满屏黄、绿灯凭空消失」的自相矛盾；改为与 classic 展开视图一一对应——迷你绿=真有 AI 在干活，迷你黄=开机空闲，展开必有同色灯。聚合纯函数 `aggregateStatus` 在 main/mini-mode.js（UMD 双通道，node 可单测）；闪烁差异由渲染层 MiniLight.jsx 的 MINI_DOT_META 区分
 - **模式切换入口（rev2 双入口并存）**：① 灯条齿轮旁 ◐ 循环按钮保留（老吴拍板不撤，循环 classic→compact→mini，tooltip 显示「下一个模式」中英文案 strip.mode.*）；② 设置窗口**顶部冻结操作栏**新增「显示模式」下拉（与「检查更新」同栏固定，滚动/面板内容永不覆盖，desc 挂下拉悬浮 title）。两入口同写 displayMode；迷你灯单击=展开回「收起前的模式」（渲染层 lastExpandedRef 记忆，绝不开详情面板）
 - **引流/打赏文案收敛（rev2）**：「没有中继服务？联系作者协助部署 →」改为「需要远程电话提醒？联系作者协助部署 →」（中英同步，不向外暴露中继原理）；Ko-fi「请作者喝杯咖啡」按钮仅英文界面显示（中文界面整行隐藏——国内用户无打赏习惯，避免留白）
 - **拖动/点击区分**：迷你灯沿用统一指针处理器的 DRAG_THRESHOLD_PX 判定——按住拖动=移窗口（pointer capture），单击=展开；mini 模式下主进程 dragStart 的基准高按模式换算（baseWindowSizeForMode），debug-dragStart 同步

@@ -4,10 +4,12 @@ import { MINI_MODE, aggregateStatus } from '../statusMeta';
 /**
  * 迷你模式的聚合小灯（v1.7.0）：整窗收成一盏圆灯，几乎不遮挡内容。
  *
- * 聚合优先级（老吴拍板）：assist(紫) > stuck(红) > running(绿闪) >
- * idle(绿不闪) > 全 offline(灰)。running 与 idle 同为绿色但闪烁语义不同
- * —— classic 面板的 STATUS_META.running 不闪，迷你灯这里单独一张色表：
- * running 要闪（有别的事在跑），idle 不闪。
+ * 聚合优先级：assist(紫) > stuck(红) > running(绿闪) > idle(黄不闪) >
+ * 全 offline(灰)。v1.7.0 rev3 修正（老吴实测反馈）：原先 idle 也归绿，导致
+ * 「迷你灯绿、展开后满屏黄、绿灯凭空消失」的自相矛盾 —— 现在迷你灯颜色与
+ * classic 展开视图一一对应：绿=有 AI 正在干活（闪），黄=开机空闲（不闪），
+ * 展开必有与迷你灯同色的一盏。running 与 idle 的闪烁差异由本组件的
+ * MINI_DOT_META 按聚合返回的状态值区分，mini-mode.js 只负责「选哪个状态」。
  *
  * 交互契约（与 App.jsx 统一指针处理器配合）：
  *  - 按住拖动 = 移动窗口（复用 pointer capture + DRAG_THRESHOLD_PX 判定，
@@ -35,10 +37,10 @@ const MINI_DOT_META = {
     glow: 'shadow-[0_0_8px_2px_rgba(34,197,94,0.55)]',
   },
   idle: {
-    // idle 归为绿色不闪（老吴：正常时只看绿/红/紫，不单独做黄色）
-    dot: 'bg-green-500',
-    ring: 'ring-green-500/40',
-    glow: 'shadow-[0_0_8px_2px_rgba(34,197,94,0.55)]',
+    // v1.7.0 rev3：idle 改黄色不闪（与 classic 展开视图一致，迷你绿=真在干活）
+    dot: 'bg-yellow-400',
+    ring: 'ring-yellow-400/40',
+    glow: 'shadow-[0_0_8px_2px_rgba(250,204,21,0.45)]',
   },
   offline: {
     dot: 'bg-gray-500',

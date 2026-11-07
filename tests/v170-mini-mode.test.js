@@ -212,14 +212,18 @@ test('D4 StatusLight compact 支持：56px 高分支 + 去状态词行 + 72px �
   assert.ok(/showStatusText && !compact \? \(/.test(light), 'compact 未隐藏状态词行');
 });
 
-test('D5 MiniLight 聚合灯：running 绿闪 / idle 绿不闪 / 紫·红闪 / 灰兜底，尺寸走 MINI 常量', () => {
+test('D5 MiniLight 聚合灯：running 绿闪 / idle 黄不闪（rev3 对齐展开视图）/ 紫·红闪 / 灰兜底，尺寸走 MINI 常量', () => {
   const src = read('src/components/MiniLight.jsx');
   assert.ok(/data-agent-id="asl-mini"/.test(src), '迷你灯缺 asl-mini 标识（App 点击判定依赖它）');
   assert.ok(!/asl-no-drag/.test(src), '迷你灯必须可拖动（不得加 asl-no-drag）');
   const running = src.slice(src.indexOf('running: {'), src.indexOf('running: {') + 200);
   const idle = src.slice(src.indexOf('idle: {'), src.indexOf('idle: {') + 200);
   assert.ok(/bg-green-500 animate-blink/.test(running), '迷你 running 必须绿闪');
-  assert.ok(/bg-green-500(?!\s*animate-blink)/.test(idle), '迷你 idle 必须绿色不闪');
+  // v1.7.0 rev3：idle 必须黄色不闪（与 classic 展开视图 idle=黄 一致），
+  // 否则「迷你绿、展开满屏黄」自相矛盾（老吴实测反馈）。
+  assert.ok(/bg-yellow-400/.test(idle), '迷你 idle 必须黄色（对齐展开视图）');
+  assert.ok(!/bg-green/.test(idle), '迷你 idle 不得再归绿色（rev3 漂移锁）');
+  assert.ok(!/animate-blink/.test(idle), '迷你 idle 必须不闪');
   assert.ok(/bg-purple-500 animate-blink/.test(src), '迷你 assist 必须紫闪');
   assert.ok(/bg-red-500 animate-blink/.test(src), '迷你 stuck 必须红闪');
   assert.ok(/bg-gray-500/.test(src), '迷你 offline 必须灰色');

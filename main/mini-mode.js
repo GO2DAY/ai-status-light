@@ -3,12 +3,12 @@
  *
  * 迷你模式 = 整窗收成一盏聚合小灯（老吴 v1.7.0 需求）：窗口约 40px 见方、
  * 圆灯 20px，聚合状态优先级 assist(紫) > stuck(红) > running(绿闪) >
- * idle(绿不闪) > 全 offline(灰)。老吴明确「正常时只看绿/红/紫」——idle
- * 归为绿色不闪，offline 归为灰色兜底，不单独做黄色。
+ * idle(黄不闪) > 全 offline(灰)。
  *
- * 运行中(running) 与 空闲(idle) 在迷你灯上都映射为绿色，但 running 要闪
- * （有别的事在跑），idle 不闪 —— 闪烁语义由渲染层 MiniLight.jsx 的
- * MINI_DOT_META 按这里返回的状态值区分，本模块只负责「选哪个状态」。
+ * v1.7.0 rev3 修正（老吴实测反馈）：原口径「idle 归为绿色」导致迷你灯绿、
+ * 展开后满屏黄（classic 视图 idle=黄）、绿灯凭空消失的自相矛盾。现改为与
+ * classic 展开视图语义一一对应：绿=有 AI 正在干活（闪），黄=开机空闲
+ * （不闪）—— 迷你灯是绿，展开必有同色的绿；迷你灯是黄，展开必有同色黄。
  *
  * UMD 双通道赋值（与 layout.js / strip-name.js 同款，绝不用 else）：
  * module.exports 与 window.ASL_MINI_MODE 同时挂 —— rollup commonjs 垫片
