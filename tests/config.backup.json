@@ -1,0 +1,32 @@
+{
+  "agents": [
+    {
+      "id": "workbuddy",
+      "name": "WorkBuddy"
+    },
+    {
+      "id": "mavis",
+      "name": "马维斯"
+    },
+    {
+      "id": "doubao",
+      "name": "豆包"
+    },
+    {
+      "id": "codex",
+      "name": "Codex"
+    },
+    {
+      "id": "kimi",
+      "name": "Kimi"
+    },
+    {
+      "id": "qwen",
+      "name": "Qwen"
+    }
+  ],
+  "window": {
+    "x": 678,
+    "y": 0
+  }
+}

@@ -269,6 +269,16 @@
     <button class="btn secondary small" id="checkUpdateBtn" type="button"></button>
     <span class="update-feedback" id="updateFeedback"></span>
     <span id="status"></span>
+    <!-- v1.7.0 rev2：显示模式开关冻结在本栏（老吴需求：与「检查更新」同栏固定，
+         面板内容滚动/展开都不会盖住；从灯条右端移入，灯条恢复只挂齿轮） -->
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-left:8px">
+      <span class="hint" id="lbDisplayMode" style="margin:0"></span>
+      <select id="selDisplayMode">
+        <option value="classic"></option>
+        <option value="compact"></option>
+        <option value="mini"></option>
+      </select>
+    </label>
     <button class="btn secondary" id="cancelBtn"></button>
     <button class="btn" id="saveBtn"></button>
   </div>
@@ -363,16 +373,8 @@
         <div class="desc" id="descShowStatusText"></div>
       </span>
     </label>
-    <!-- v1.7.0：显示模式三选一（classic 经典 / compact 精简 / mini 迷你） -->
-    <div class="lang-row" style="margin-top:8px">
-      <span class="hint" id="lbDisplayMode" style="margin:0"></span>
-      <select id="selDisplayMode">
-        <option value="classic"></option>
-        <option value="compact"></option>
-        <option value="mini"></option>
-      </select>
-    </div>
-    <div class="desc" id="descDisplayMode" style="margin:2px 0 8px 0"></div>
+    <!-- v1.7.0 rev2：显示模式三选一已移入顶部冻结操作栏（stickybar），此处不再重复渲染；
+         desc 文案改为 select 的 title 悬浮提示（见 applyStaticTexts）。 -->
     <!-- v1.7.0：自动收起开关（全绿 60s 收迷你，出现 stuck/assist 立即展开） -->
     <label class="switch-row">
       <input type="checkbox" id="swAutoCollapse" />
@@ -534,8 +536,9 @@
       lbShowStatusText: 'sw.showStatusText',
       descShowStatusText: 'sw.showStatusTextDesc',
       // v1.7.0：显示模式三选一 + 自动收起
+      // v1.7.0 rev2：descDisplayMode 元素已随「开关」区旧块移除（开关移入 stickybar），
+      // desc 文案改挂到 selDisplayMode 的 title（见下方 dsel 段）。
       lbDisplayMode: 'sw.displayMode',
-      descDisplayMode: 'sw.displayModeDesc',
       lbAutoCollapse: 'sw.autoCollapse',
       descAutoCollapse: 'sw.autoCollapseDesc',
       lbAutoDiscover: 'sw.autoDiscover',
@@ -580,6 +583,10 @@
     document.getElementById('mqttBrokerWssInput').placeholder = L('sw.mqttBrokerWssPh');
     document.getElementById('alertPromoBtn').textContent = L('sw.alertPromo');
     document.getElementById('aboutKofiBtn').textContent = L('sw.aboutKofi');
+    // v1.7.0 rev2：Ko-fi 打赏按钮仅英文界面显示（老吴：国内用户无此习惯；
+    // 隐藏整行避免留白。官网/国内收款通道上线后再评估换国内入口）
+    document.getElementById('aboutKofiBtn').parentElement.style.display =
+      (lang === 'en-US') ? '' : 'none';
     // 语言下拉选项文案（固定三档）
     var sel = document.getElementById('langSelect');
     sel.options[0].textContent = L('sw.langAuto');
@@ -590,6 +597,8 @@
     dsel.options[0].textContent = L('sw.modeClassic');
     dsel.options[1].textContent = L('sw.modeCompact');
     dsel.options[2].textContent = L('sw.modeMini');
+    // v1.7.0 rev2：冻结栏空间有限，desc 说明改为悬浮 title
+    dsel.title = L('sw.displayModeDesc');
     renderPrompts();
     renderPresets();
     renderAbout();

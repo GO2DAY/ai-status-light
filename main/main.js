@@ -673,7 +673,8 @@ function applyReport(body) {
 
 function computeWidth() {
   const count = Math.max(agents.size, 1);
-  // v1.7.0：齿轮旁新增「模式切换」按钮（同 32px 宽），右端共两颗图标按钮。
+  // v1.7.0 rev2：右端两颗图标按钮（⚙ 齿轮 + ◐ 模式循环，老吴拍板保留）；
+  // 设置窗口顶部冻结栏的「显示模式」下拉为第二入口。
   return SIDE_PADDING * 2 + count * LIGHT_WIDTH + SETTINGS_WIDTH * 2;
 }
 

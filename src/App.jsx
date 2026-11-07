@@ -14,6 +14,8 @@ import {
  * v1.7.0 三档显示模式循环顺序：classic → compact → mini → classic。
  * 模式切换按钮按此循环；迷你灯单击展开回「收起前的模式」（lastExpandedRef）。
  */
+// v1.7.0 rev2：模式循环（classic→compact→mini）。灯条 ◐ 按钮与设置窗口
+// 顶部冻结栏下拉**双入口并存**（老吴拍板 ◐ 不撤）。
 const MODE_CYCLE = ['classic', 'compact', 'mini'];
 
 /**
@@ -483,9 +485,8 @@ export default function App() {
       </button>
       <button
         type="button"
-        // v1.7.0 三档显示模式切换（循环 classic→compact→mini），tooltip
-        // 显示「下一个模式」名；紧随齿轮之后（齿轮 ml-auto 把右端两颗
-        // 按钮一起推到最右）。
+        // v1.7.0 rev2：◐ 循环切换按钮保留（老吴拍板不撤）——灯条快捷入口，
+        // 与设置窗口顶部冻结栏的「显示模式」下拉双入口并存、同写 displayMode。
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => applyDisplayMode(nextDisplayMode)}
         className="asl-no-drag flex w-8 items-center justify-center text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-100"
