@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 
 /** 应用版本号（窗口标题/语言包插值共用，升级只改这里）。 */
-const APP_VERSION = '1.6.3';
+const APP_VERSION = '1.7.0';
 
 const HTTP_PORT = 17890;
 const HTTP_HOST = '127.0.0.1';
@@ -37,6 +37,14 @@ const TICK_MS = 5_000;
 // 保证 assist 大灯（20px）+ 名称两行 + 状态词不裁切。
 // 渲染层 App.jsx 的 h-14 → h-[72px] 必须同步改（两侧只差会裁内容或露底）。
 const ROW_HEIGHT = 72;
+// v1.7.0 三档显示模式的另两档基准行高：
+// compact（精简）= 灯 + 名称、去状态词行，回到 v1.6.2 的 56px 视觉；
+// mini（迷你）= 整窗收成一盏聚合小灯，边长取自 main/mini-mode.js（40px）。
+// 渲染层 App.jsx 的两个行高类（h-[72px] / h-[56px]）必须与这里同步。
+const ROW_HEIGHT_COMPACT = 56;
+// v1.7.0 自动收起：autoCollapse 开启且所有 agent 无 stuck/assist 持续满
+// 此时长后自动切到 mini；任一 stuck/assist 出现立即恢复收起前模式。
+const AUTO_COLLAPSE_DELAY_MS = 60_000;
 const LIGHT_WIDTH = 56;
 const SIDE_PADDING = 12;
 const SETTINGS_WIDTH = 32;
@@ -211,7 +219,9 @@ let saveTimer = null;
 // repeatAlert: 紫灯(assist)/红灯(stuck) 每 30s 重复提醒直到 ack/解除（v1.4.0，默认开）
 // language: 界面语言 auto/zh-CN/en-US（v1.5.0，默认 auto=跟随系统 locale）
 // showStatusText: 灯下状态文字（v1.6.3，老吴需求，默认开——不悬停扫一眼可见）
-let settings = { soundOn: true, soundVolume: 'high', repeatAlert: true, showStatusText: true, language: 'auto' };
+// displayMode: 显示模式 classic/compact/mini（v1.7.0，缺省 classic，非法兜底 classic）
+// autoCollapse: 全绿 60s 自动收迷你（v1.7.0，缺省关；出现 stuck/assist 立即展开）
+let settings = { soundOn: true, soundVolume: 'high', repeatAlert: true, showStatusText: true, displayMode: 'classic', autoCollapse: false, language: 'auto' };
 
 /**
  * 生成每台机器唯一的 MQTT 主题前缀（v1.5.0 脱敏）：asl/ + 12 位随机 hex。
@@ -305,6 +315,14 @@ function loadConfig() {
     // v1.6.3 灯下状态文字开关（缺省 true = 显示；老配置无此键行为不变）
     if (raw.settings && typeof raw.settings.showStatusText === 'boolean') {
       settings.showStatusText = raw.settings.showStatusText;
+    }
+    // v1.7.0 显示模式三档（classic/compact/mini；缺省 classic，非法值兜底 classic）
+    if (raw.settings && typeof raw.settings.displayMode === 'string') {
+      settings.displayMode = settingsOps.normalizeDisplayMode(raw.settings.displayMode) || 'classic';
+    }
+    // v1.7.0 自动收起开关（缺省 false；老配置无此键行为不变）
+    if (raw.settings && typeof raw.settings.autoCollapse === 'boolean') {
+      settings.autoCollapse = raw.settings.autoCollapse;
     }
     // v1.5.0 界面语言（auto/zh-CN/en-US；非法值按 auto 跟随系统）
     if (raw.settings && typeof raw.settings.language === 'string') {
@@ -448,6 +466,108 @@ function broadcastState() {
   // 心跳降级的 5s tick 都走这里），mqtt-bridge 内部做 JSON 去重 + 500ms 节流，
   // 灯没变一条都不发，cloudRelay 关闭时一并停发。
   if (cloudBridge) cloudBridge.publishState(snapshot);
+  // v1.7.0 自动收起判定（autoCollapse 关闭时为空操作）。挂在唯一收口上，
+  // 5s tick 兜底「最后一次上报早已全绿」的静默场景。
+  try {
+    maybeAutoCollapse(snapshot);
+  } catch (err) {
+    logError(`maybeAutoCollapse failed: ${err && err.message}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v1.7.0 显示模式与自动收起
+// ---------------------------------------------------------------------------
+// displayMode 三档（classic/compact/mini）的窗口尺寸换算与切换落点收在这里；
+// 自动收起是主进程职责（状态机/心跳都在主进程），渲染层只负责按
+// displayMode:change 广播重排 DOM。maybeAutoCollapse 挂在 broadcastState
+// 上 —— 它是所有状态变化的唯一收口（上报/ack/增删/5s tick 都走这里），
+// 「出现 stuck/assist 立即展开」和「全绿满 60s 收起」都在这里判定。
+
+/** v1.7.0 自动收起的运行时标记：全绿起始时刻 / mini 是否自动收起进入的 / 收起前模式。 */
+let allClearSince = 0;
+let autoCollapsed = false;
+let autoCollapsePrevMode = 'classic';
+
+/** 重置自动收起计时（autoCollapse 开关切换 / 用户手动切模式时调用，重新给 60s 观察期）。 */
+function resetAutoCollapseTimer() {
+  allClearSince = 0;
+  autoCollapsed = false;
+}
+
+/** 当前显示模式（已规范化，绝不出非法值）。 */
+function currentDisplayMode() {
+  return settingsOps.normalizeDisplayMode(settings.displayMode) || 'classic';
+}
+
+/** 三档模式的窗口基准尺寸：mini=40×40，compact=灯条全宽×56，classic=灯条全宽×72。 */
+function baseWindowSizeForMode(mode) {
+  if (mode === 'mini') {
+    return { width: miniMode.MINI_WINDOW, height: miniMode.MINI_WINDOW };
+  }
+  if (mode === 'compact') {
+    return { width: computeWidth(), height: ROW_HEIGHT_COMPACT };
+  }
+  return { width: computeWidth(), height: ROW_HEIGHT };
+}
+
+/** 迷你模式下灯条是否收起为一盏聚合小灯。 */
+function isMiniMode() {
+  return currentDisplayMode() === 'mini';
+}
+
+/**
+ * 应用当前 displayMode 的窗口尺寸：保持右上角锚点（右缘/上缘不动），
+ * 再按工作区吸附兜底（迷你灯绝不落半屏外）；切换后广播渲染层重排。
+ * 拖动进行中时 setMainWindowBounds 自带守卫（只移位不改尺寸），不会
+ * 把用户手上的窗口抢走 —— 面板/设置窗口路径同样安全。
+ */
+function applyDisplayModeSize() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const [curX, curY] = mainWindow.getPosition();
+  const [curWidth] = mainWindow.getSize();
+  const { width, height } = baseWindowSizeForMode(currentDisplayMode());
+  const snapped = snapToWorkAreaEdges(curX + curWidth - width, curY, width, height);
+  setMainWindowBounds({ x: snapped.x, y: snapped.y, width, height });
+  windowPosition = { x: snapped.x, y: snapped.y };
+  mainWindow.webContents.send('displayMode:change', currentDisplayMode());
+  saveConfig();
+}
+
+/**
+ * 自动收起判定（settings.autoCollapse 开启时生效）：
+ *   - 任一 stuck/assist：清计时；若 mini 是「自动收起」进入的，立即恢复收起前模式。
+ *     （用户手动切的 mini 不打扰 —— 那是他自己的选择，点小灯自己展开。）
+ *   - 全绿：从首个全绿时刻起计满 AUTO_COLLAPSE_DELAY_MS 后切 mini，
+ *     记住收起前模式（classic/compact）供恢复。
+ * @param {Array<{status: string}>} snapshot serializeAgents() 的快照
+ */
+function maybeAutoCollapse(snapshot) {
+  if (!settings.autoCollapse) {
+    resetAutoCollapseTimer();
+    return;
+  }
+  const attention = Array.isArray(snapshot)
+    && snapshot.some((a) => a && (a.status === 'stuck' || a.status === 'assist'));
+  const now = Date.now();
+  if (attention) {
+    allClearSince = 0;
+    if (autoCollapsed && settings.displayMode === 'mini') {
+      settings.displayMode = settingsOps.normalizeDisplayMode(autoCollapsePrevMode) || 'classic';
+      autoCollapsed = false;
+      applyDisplayModeSize();
+      logError(`auto-collapse: attention detected, restored to ${settings.displayMode}`);
+    }
+    return;
+  }
+  if (!allClearSince) allClearSince = now;
+  if (settings.displayMode !== 'mini' && now - allClearSince >= AUTO_COLLAPSE_DELAY_MS) {
+    autoCollapsePrevMode = currentDisplayMode() === 'compact' ? 'compact' : 'classic';
+    autoCollapsed = true;
+    settings.displayMode = 'mini';
+    applyDisplayModeSize();
+    logError(`auto-collapse: all clear ${Math.round(AUTO_COLLAPSE_DELAY_MS / 1000)}s, collapsed to mini (prev=${autoCollapsePrevMode})`);
+  }
 }
 
 // Hard cap on tracked agents. The HTTP server is reachable from any local
@@ -553,15 +673,18 @@ function applyReport(body) {
 
 function computeWidth() {
   const count = Math.max(agents.size, 1);
-  return SIDE_PADDING * 2 + count * LIGHT_WIDTH + SETTINGS_WIDTH;
+  // v1.7.0：齿轮旁新增「模式切换」按钮（同 32px 宽），右端共两颗图标按钮。
+  return SIDE_PADDING * 2 + count * LIGHT_WIDTH + SETTINGS_WIDTH * 2;
 }
 
 function resizeWindowToAgents() {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    const [currentWidth, height] = mainWindow.getSize();
-    const targetWidth = computeWidth();
-    if (targetWidth !== currentWidth) {
-      setMainWindowBounds({ width: targetWidth, height });
+    const [currentWidth, currentHeight] = mainWindow.getSize();
+    // v1.7.0：mini 模式下窗口恒为 40×40 聚合小灯，与 agent 数量无关；
+    // classic/compact 高度仍由渲染层 ResizeObserver → setHeight 管理。
+    const target = baseWindowSizeForMode(currentDisplayMode());
+    if (target.width !== currentWidth || (isMiniMode() && target.height !== currentHeight)) {
+      setMainWindowBounds({ width: target.width, height: isMiniMode() ? target.height : currentHeight });
     }
   }
 }
@@ -657,11 +780,15 @@ function createWindow() {
     } catch { /* ignore */ }
     return;
   }
-  const width = computeWidth();
+  // v1.7.0：三档模式的启动尺寸。mini 启动 = 40×40 聚合小灯；
+  // classic = 灯条全宽×72；compact = 灯条全宽×56。
+  const mode = currentDisplayMode();
+  const { width: modeWidth, height: modeHeight } = baseWindowSizeForMode(mode);
+  const width = modeWidth;
   const savedX = windowPosition.x;
   const savedY = windowPosition.y;
   const hasSaved = savedX !== null && savedY !== null;
-  let useSavedPosition = hasSaved && isPositionVisible(savedX, savedY, width, ROW_HEIGHT);
+  let useSavedPosition = hasSaved && isPositionVisible(savedX, savedY, width, modeHeight);
 
   if (hasSaved && !useSavedPosition) {
     // Remembered position is off-screen (monitor unplugged / resolution changed
@@ -678,7 +805,7 @@ function createWindow() {
   const iconPath = path.join(__dirname, '..', 'assets', 'status-light.ico');
   mainWindow = new BrowserWindow({
     width,
-    height: ROW_HEIGHT,
+    height: modeHeight,
     ...(useSavedPosition ? { x: windowPosition.x, y: windowPosition.y } : {}),
     frame: false,
     resizable: false,
@@ -872,8 +999,10 @@ function startHttpServer() {
         logError(`[debug-dragStart] cur=${JSON.stringify(cur)} win=${width}x${height}`);
         let baseWidth = width;
         let baseHeight = height;
-        if (height > ROW_HEIGHT + 4) {
-          baseHeight = ROW_HEIGHT;
+        // v1.7.0：面板收起基准高按当前模式取（mini=40 / compact=56 / classic=72）。
+        const debugBaseTargetHeight = baseWindowSizeForMode(currentDisplayMode()).height;
+        if (height > debugBaseTargetHeight + 4) {
+          baseHeight = debugBaseTargetHeight;
           setMainWindowBounds({ x, y, height: baseHeight });
           logError(`[debug-dragStart] collapsed panel: set height=${baseHeight}`);
           mainWindow.webContents.send('window:collapsePanels');
@@ -1096,6 +1225,22 @@ ipcMain.handle('settings:set', (_event, payload) => {
   if (payload && typeof payload.repeatAlert === 'boolean') {
     settings.repeatAlert = payload.repeatAlert;
   }
+  // v1.7.0 自动收起开关：切换时重置计时（重新给 60s 观察期）。
+  if (payload && typeof payload.autoCollapse === 'boolean') {
+    if (settings.autoCollapse !== payload.autoCollapse) resetAutoCollapseTimer();
+    settings.autoCollapse = payload.autoCollapse;
+  }
+  // v1.7.0 显示模式（classic/compact/mini）：非法值忽略不切；合法且变化时
+  // 换算窗口尺寸（右上角锚点+吸附）并广播渲染层。用户手动切模式 = 接管，
+  // 自动收起的「恢复」标记清掉（mini 不再被误判为自动收起进入的）。
+  if (payload && typeof payload.displayMode === 'string') {
+    const mode = settingsOps.normalizeDisplayMode(payload.displayMode);
+    if (mode && mode !== settings.displayMode) {
+      settings.displayMode = mode;
+      resetAutoCollapseTimer();
+      applyDisplayModeSize();
+    }
+  }
   saveConfig();
   return { ok: true, settings };
 });
@@ -1117,8 +1262,13 @@ ipcMain.on('window:setHeight', (_event, height) => {
  */
 ipcMain.on('window:setWidth', (_event, width) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  // v1.7.0：mini 模式下面板永不打开，任何宽度请求都按 mini 基准（40）兜底。
   const w = Number(width);
   if (!Number.isFinite(w) || w <= 0) {
+    resizeWindowToAgents();
+    return;
+  }
+  if (isMiniMode()) {
     resizeWindowToAgents();
     return;
   }
@@ -1228,6 +1378,7 @@ const aiSignatures = require('./ai-signatures');
 const lnkParser = require('./lnk-parser');
 const i18n = require('./i18n');
 const layoutMath = require('./layout');
+const miniMode = require('./mini-mode');
 const alertWebhook = require('./alert-webhook');
 // v1.6.0：预选库 / 齿轮菜单白名单 / 作者配置中心 / 自动更新
 const aiPresets = require('./ai-presets');
@@ -1516,12 +1667,14 @@ ipcMain.on('window:dragStart', (_event, pos) => {
   const [width, height] = mainWindow.getSize();
   logError(`[drag] dragStart ENTER win=${width}x${height} cur=(${pos.cursorX},${pos.cursorY})`);
   // If the user starts a drag while a detail/settings panel is open (window
-  // height > ROW_HEIGHT), collapse it back to the base strip height. The
+  // height > 基准行高), collapse it back to the base strip height. The
   // strip must never get dragged while it's been stretched open by a panel.
+  // v1.7.0：基准高按当前模式取（mini=40 / compact=56 / classic=72）。
   let baseWidth = width;
   let baseHeight = height;
-  if (height > ROW_HEIGHT + 4) {
-    baseHeight = ROW_HEIGHT;
+  const baseTargetHeight = baseWindowSizeForMode(currentDisplayMode()).height;
+  if (height > baseTargetHeight + 4) {
+    baseHeight = baseTargetHeight;
     setMainWindowBounds({ x, y, height: baseHeight });
     logError(`[drag] collapsed panel on dragStart: was ${height} -> ${baseHeight}`);
     // Ask the renderer to also drop its panel state so React stops sending
@@ -1941,6 +2094,9 @@ ipcMain.handle('settingsPanel:get', () => ({
   repeatAlert: settings.repeatAlert !== false,
   // v1.6.3 灯下状态文字开关（缺省开）
   showStatusText: settings.showStatusText !== false,
+  // v1.7.0 显示模式三档与自动收起开关（缺省 classic/false）
+  displayMode: currentDisplayMode(),
+  autoCollapse: settings.autoCollapse === true,
   autoDiscover: configExtra.autoDiscover !== false,
   cloudRelay: currentConfigCloudRelay() === true,
   // v1.5.0：语言（原始设置值 + 已解析值）与每台机器随机 MQTT 主题
@@ -2030,6 +2186,19 @@ ipcMain.handle('settingsPanel:save', (_event, payload) => {
   settings.repeatAlert = value.repeatAlert;
   // v1.6.3 灯下状态文字开关（面板总是显式回传）
   settings.showStatusText = value.showStatusText;
+  // v1.7.0 显示模式三档 + 自动收起（面板总是显式回传）。displayMode 变化时
+  // 换算窗口尺寸并广播渲染层；autoCollapse 切换时重置 60s 观察期。
+  settings.autoCollapse = value.autoCollapse;
+  const prevDisplayMode = settings.displayMode;
+  settings.displayMode = value.displayMode;
+  if (settings.displayMode !== prevDisplayMode) {
+    resetAutoCollapseTimer();
+    applyDisplayModeSize();
+  } else if (settings.autoCollapse) {
+    // displayMode 没变但保存动作发生：给自动收起一个全新观察期，避免
+    // 「面板开着改了别的东西，保存后立刻收起」的突兀体验。
+    allClearSince = Date.now();
+  }
   configExtra.cloudRelay = value.cloudRelay;
   configExtra.screenWatch = value.screenWatch;
   configExtra.openAtLogin = value.openAtLogin;

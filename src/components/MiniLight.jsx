@@ -1,0 +1,77 @@
+import React from 'react';
+import { MINI_MODE, aggregateStatus } from '../statusMeta';
+
+/**
+ * 迷你模式的聚合小灯（v1.7.0）：整窗收成一盏圆灯，几乎不遮挡内容。
+ *
+ * 聚合优先级（老吴拍板）：assist(紫) > stuck(红) > running(绿闪) >
+ * idle(绿不闪) > 全 offline(灰)。running 与 idle 同为绿色但闪烁语义不同
+ * —— classic 面板的 STATUS_META.running 不闪，迷你灯这里单独一张色表：
+ * running 要闪（有别的事在跑），idle 不闪。
+ *
+ * 交互契约（与 App.jsx 统一指针处理器配合）：
+ *  - 按住拖动 = 移动窗口（复用 pointer capture + DRAG_THRESHOLD_PX 判定，
+ *    本组件刻意不挂「禁拖」类名，也不拦截 pointerdown，保证整灯可拖）；
+ *  - 单击 = 展开回切换前的模式（App.jsx 按 data-agent-id="asl-mini" 识别，
+ *    绝不开详情面板）。
+ *
+ * MINI_LIGHT_SIZE（20px）与 MINI_WINDOW（40px）来自 main/mini-mode.js；
+ * DOM 上用等价 Tailwind 尺寸类（w-5 h-5 / w-10 h-10）保持单一视觉来源。
+ */
+const MINI_DOT_META = {
+  assist: {
+    dot: 'bg-purple-500 animate-blink',
+    ring: 'ring-purple-400/50',
+    glow: 'shadow-[0_0_12px_4px_rgba(168,85,247,0.7)]',
+  },
+  stuck: {
+    dot: 'bg-red-500 animate-blink',
+    ring: 'ring-red-500/40',
+    glow: 'shadow-[0_0_10px_3px_rgba(239,68,68,0.6)]',
+  },
+  running: {
+    dot: 'bg-green-500 animate-blink',
+    ring: 'ring-green-500/40',
+    glow: 'shadow-[0_0_8px_2px_rgba(34,197,94,0.55)]',
+  },
+  idle: {
+    // idle 归为绿色不闪（老吴：正常时只看绿/红/紫，不单独做黄色）
+    dot: 'bg-green-500',
+    ring: 'ring-green-500/40',
+    glow: 'shadow-[0_0_8px_2px_rgba(34,197,94,0.55)]',
+  },
+  offline: {
+    dot: 'bg-gray-500',
+    ring: 'ring-gray-500/30',
+    glow: '',
+  },
+};
+
+const MINI_LIGHT_CLASS = MINI_MODE && MINI_MODE.MINI_LIGHT_SIZE === 24 ? 'w-6 h-6' : 'w-5 h-5';
+
+/**
+ * @param {object} props
+ * @param {Array<{status: string}>} props.agents 全部 agent（组件内部做聚合）
+ * @param {string} props.miniAria aria-label（i18n 文案由 App 传入）
+ */
+function MiniLight({ agents, miniAria }) {
+  const status = aggregateStatus((agents || []).map((a) => a && a.status));
+  const meta = MINI_DOT_META[status] || MINI_DOT_META.offline;
+  return (
+    <div className="flex h-10 w-10 items-center justify-center bg-[#111827]" data-mini="true">
+      <button
+        type="button"
+        data-agent-id="asl-mini"
+        aria-label={miniAria}
+        title=""
+        className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-white/5"
+      >
+        <span
+          className={`block rounded-full ring-2 ${meta.dot} ${meta.ring} ${meta.glow} ${MINI_LIGHT_CLASS}`}
+        />
+      </button>
+    </div>
+  );
+}
+
+export default MiniLight;

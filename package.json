@@ -1,6 +1,6 @@
 {
   "name": "ai-status-light",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "AI Status Light - multi-AI traffic-light status overlay: local screen detection + MQTT cloud relay + bilingual (zh/en) settings panel",
   "author": "ai-status-light contributors",
   "main": "main/main.js",

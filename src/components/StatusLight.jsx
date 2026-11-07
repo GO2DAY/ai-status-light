@@ -14,10 +14,12 @@ import { STATUS_META, shortName, stripStatusText } from '../statusMeta';
  * @param {{id: string, name: string, status: string, task: string, lastHeartbeat: number, auto: boolean}} props.agent
  * @param {boolean} props.selected
  * @param {boolean} [props.showStatusText=true] v1.6.3 灯下状态文字（缺省显示）
+ * @param {boolean} [props.compact=false] v1.7.0 精简模式：灯 + 名称（去状态词行），
+ *   行高收 56px（v1.6.2 视觉，名称仍全称两行）。classic 模式传 false 保持 72px。
  * @param {React.Ref<HTMLButtonElement>} props.innerRef forwarded so the parent can attach a unified pointerdown listener
  */
 const StatusLight = React.forwardRef(function StatusLight(
-  { agent, selected, showStatusText = true },
+  { agent, selected, showStatusText = true, compact = false },
   innerRef
 ) {
   const meta = STATUS_META[agent.status] || STATUS_META.offline;
@@ -43,7 +45,9 @@ const StatusLight = React.forwardRef(function StatusLight(
       data-agent-id={agent.id}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`flex flex-col items-center justify-center w-14 h-[72px] rounded-md transition-colors cursor-pointer ${
+      className={`flex flex-col items-center justify-center ${
+        compact ? 'w-14 h-[56px]' : 'w-14 h-[72px]'
+      } rounded-md transition-colors cursor-pointer ${
         selected ? 'bg-white/10' : 'hover:bg-white/5'
       } ${agent.status === 'assist' ? 'bg-purple-500/15' : ''}`}
       title=""
@@ -66,8 +70,9 @@ const StatusLight = React.forwardRef(function StatusLight(
         {shortName(agent)}
       </span>
       {/* v1.6.3 灯下状态文字（老吴需求：不悬停、扫一眼可见）。小号弱化字，
-          颜色跟随灯色；文字不闪（圆灯已闪，双闪是噪音）。 */}
-      {showStatusText ? (
+          颜色跟随灯色；文字不闪（圆灯已闪，双闪是噪音）。
+          v1.7.0：compact（精简模式）去掉状态词行（行高 56px 放不下也不需要）。 */}
+      {showStatusText && !compact ? (
         <span
           className={`mt-[1px] w-[52px] truncate text-center text-[9px] leading-[10px] ${
             meta.text || 'text-gray-400'

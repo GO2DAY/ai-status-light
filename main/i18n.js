@@ -63,6 +63,13 @@
     'strip.empty': '暂无 AI 源，点右侧 ⚙ 添加',
     'strip.gearAria': '设置',
     'strip.gearTitle': 'AI 源管理',
+    // v1.7.0 三档显示模式：模式切换按钮 tooltip 显示「下一个模式」名
+    'strip.mode.classic': '经典模式',
+    'strip.mode.compact': '精简模式',
+    'strip.mode.mini': '迷你模式',
+    'strip.modeAria': '切换显示模式',
+    // v1.7.0 迷你灯 aria（聚合灯不代表单一 agent）
+    'strip.miniAria': 'AI 状态（迷你模式，点击展开）',
     // v1.6.3 灯下状态文字：短词版状态文案（tooltip/详情用 status.* 长文案，
     // 灯条 52px 宽度下只能放短词，故单独一套 key）
     'strip.status.running': '运行中',
@@ -135,6 +142,14 @@
     // v1.6.3 灯下状态文字开关（缺省开）
     'sw.showStatusText': '灯下状态文字',
     'sw.showStatusTextDesc': '每盏灯名称下方常显一行小字状态词（运行中/空闲/卡住/等你处理/离线），不用悬停就能看清',
+    // v1.7.0 三档显示模式 + 自动收起
+    'sw.displayMode': '显示模式',
+    'sw.displayModeDesc': '经典=灯+名称+状态词；精简=灯+名称；迷你=整条收成一盏聚合小灯，几乎不占屏幕，点击小灯展开',
+    'sw.modeClassic': '经典模式',
+    'sw.modeCompact': '精简模式',
+    'sw.modeMini': '迷你模式',
+    'sw.autoCollapse': '自动收起',
+    'sw.autoCollapseDesc': '所有 AI 都无卡住/求助持续 60 秒后自动收成迷你灯；一出现卡住或求助立即展开回原模式',
     'sw.cloudRelay': '云端中转（MQTT）',
     'sw.cloudRelayDesc': '接收云电脑/服务器上 AI 的状态上报；只在本地用时可以关掉',
     'sw.mqttTopic': '云端主题',
@@ -280,6 +295,12 @@
     'strip.empty': 'No AI sources yet — click ⚙ to add',
     'strip.gearAria': 'Settings',
     'strip.gearTitle': 'Manage AI sources',
+    // v1.7.0 three display modes: the mode toggle button tooltip shows the NEXT mode
+    'strip.mode.classic': 'Classic mode',
+    'strip.mode.compact': 'Compact mode',
+    'strip.mode.mini': 'Mini mode',
+    'strip.modeAria': 'Switch display mode',
+    'strip.miniAria': 'AI status (mini mode, click to expand)',
     // v1.6.3 status text under lights (short words — strip is only 52px wide)
     'strip.status.running': 'Running',
     'strip.status.idle': 'Idle',
@@ -348,6 +369,14 @@
     // v1.6.3 status text under lights (default on)
     'sw.showStatusText': 'Status text under lights',
     'sw.showStatusTextDesc': 'Always shows a short status word under each light name (Running / Idle / Stuck / Waiting / Offline) — no hovering needed',
+    // v1.7.0 three display modes + auto-collapse
+    'sw.displayMode': 'Display mode',
+    'sw.displayModeDesc': 'Classic = lights + names + status words; Compact = lights + names; Mini = the whole strip collapses into one tiny aggregated light — click it to expand',
+    'sw.modeClassic': 'Classic mode',
+    'sw.modeCompact': 'Compact mode',
+    'sw.modeMini': 'Mini mode',
+    'sw.autoCollapse': 'Auto-collapse',
+    'sw.autoCollapseDesc': 'Collapses into the mini light after 60 seconds with no stuck/assist; expands back to the previous mode the moment one appears',
     'sw.cloudRelay': 'Cloud relay (MQTT)',
     'sw.cloudRelayDesc': 'Receives status reports from AIs on cloud machines/servers; turn off for local-only use',
     'sw.mqttTopic': 'Cloud topic',

@@ -173,4 +173,16 @@ contextBridge.exposeInMainWorld('statusLight', {
 
   /** 主进程代开外部链接（https 白名单，v1.6.0）。 */
   openExternal: (url) => ipcRenderer.send('shell:openExternal', url),
+
+  /**
+   * 订阅显示模式变化广播（v1.7.0）：主进程在 displayMode 切换（按钮/
+   * 设置窗口/自动收起）并完成窗口尺寸换算后推送，渲染层据此重排 DOM。
+   * @param {('classic' | 'compact' | 'mini') => void} callback
+   * @returns {() => void} unsubscribe
+   */
+  onDisplayModeChange: (callback) => {
+    const listener = (_event, mode) => callback(mode);
+    ipcRenderer.on('displayMode:change', listener);
+    return () => ipcRenderer.removeListener('displayMode:change', listener);
+  },
 });

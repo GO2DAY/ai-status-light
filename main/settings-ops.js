@@ -30,6 +30,18 @@ const SOUND_VOLUMES = ['low', 'medium', 'high'];
 /** 界面语言设置值（v1.5.0）：auto=跟随系统；zh/en 为 zh-CN/en-US 的短别名。 */
 const LANGUAGES = ['auto', 'zh-CN', 'en-US', 'zh', 'en'];
 
+/**
+ * 显示模式（v1.7.0）：classic=经典（灯+名称+状态词，行高 72）、
+ * compact=精简（灯+名称，行高 56）、mini=迷你（整窗聚合小灯 40px 见方）。
+ * 缺省 classic；非法值一律兜底 classic（老配置无此键行为不变）。
+ */
+const DISPLAY_MODES = ['classic', 'compact', 'mini'];
+
+/** 规范化显示模式值：合法返回原值，非法返回 null（调用方兜底 classic）。 */
+function normalizeDisplayMode(v) {
+  return DISPLAY_MODES.includes(v) ? v : null;
+}
+
 /** 规范化语言值：zh->zh-CN，en->en-US；非法返回 null。 */
 function normalizeLanguage(v) {
   if (typeof v !== 'string') return null;
@@ -240,6 +252,10 @@ function validateSettingsPayload(payload) {
       repeatAlert: boolOr(payload.repeatAlert, true),
       // v1.6.3 灯下状态文字（缺省 true = 显示）；设置窗口面板总是显式回传
       showStatusText: boolOr(payload.showStatusText, true),
+      // v1.7.0 显示模式三档（缺省/非法兜底 classic）；设置窗口面板总是显式回传
+      displayMode: normalizeDisplayMode(payload.displayMode) || 'classic',
+      // v1.7.0 自动收起（缺省 false = 不自动切）；开启后全绿 60s 自动收迷你
+      autoCollapse: boolOr(payload.autoCollapse, false),
       autoDiscover: boolOr(payload.autoDiscover, true),
       // v1.5.0 脱敏：云端中转出厂默认关闭（公共 broker 不应默认连）；
       // 面板始终显式传值，这里的缺省只兜老调用方/手动构造的 payload。
@@ -356,7 +372,9 @@ module.exports = {
   KNOWN_TOP_KEYS,
   SOUND_VOLUMES,
   LANGUAGES,
+  DISPLAY_MODES,
   normalizeLanguage,
+  normalizeDisplayMode,
   shouldSkipDeletion,
   addToBlacklist,
   removeFromBlacklist,

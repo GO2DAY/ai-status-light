@@ -363,6 +363,24 @@
         <div class="desc" id="descShowStatusText"></div>
       </span>
     </label>
+    <!-- v1.7.0：显示模式三选一（classic 经典 / compact 精简 / mini 迷你） -->
+    <div class="lang-row" style="margin-top:8px">
+      <span class="hint" id="lbDisplayMode" style="margin:0"></span>
+      <select id="selDisplayMode">
+        <option value="classic"></option>
+        <option value="compact"></option>
+        <option value="mini"></option>
+      </select>
+    </div>
+    <div class="desc" id="descDisplayMode" style="margin:2px 0 8px 0"></div>
+    <!-- v1.7.0：自动收起开关（全绿 60s 收迷你，出现 stuck/assist 立即展开） -->
+    <label class="switch-row">
+      <input type="checkbox" id="swAutoCollapse" />
+      <span>
+        <span class="label" id="lbAutoCollapse"></span>
+        <div class="desc" id="descAutoCollapse"></div>
+      </span>
+    </label>
     <label class="switch-row">
       <input type="checkbox" id="swAutoDiscover" />
       <span>
@@ -515,6 +533,11 @@
       // v1.6.3：灯下状态文字开关
       lbShowStatusText: 'sw.showStatusText',
       descShowStatusText: 'sw.showStatusTextDesc',
+      // v1.7.0：显示模式三选一 + 自动收起
+      lbDisplayMode: 'sw.displayMode',
+      descDisplayMode: 'sw.displayModeDesc',
+      lbAutoCollapse: 'sw.autoCollapse',
+      descAutoCollapse: 'sw.autoCollapseDesc',
       lbAutoDiscover: 'sw.autoDiscover',
       descAutoDiscover: 'sw.autoDiscoverDesc',
       lbOpenAtLogin: 'sw.openAtLogin',
@@ -562,6 +585,11 @@
     sel.options[0].textContent = L('sw.langAuto');
     sel.options[1].textContent = L('sw.langZh');
     sel.options[2].textContent = L('sw.langEn');
+    // v1.7.0：显示模式下拉选项文案（固定三档，中英双语随语言切换）
+    var dsel = document.getElementById('selDisplayMode');
+    dsel.options[0].textContent = L('sw.modeClassic');
+    dsel.options[1].textContent = L('sw.modeCompact');
+    dsel.options[2].textContent = L('sw.modeMini');
     renderPrompts();
     renderPresets();
     renderAbout();
@@ -949,6 +977,9 @@
       repeatAlert: document.getElementById('swRepeatAlert').checked,
       // v1.6.3：灯下状态文字（总是显式回传，主进程据此覆盖）
       showStatusText: document.getElementById('swShowStatusText').checked,
+      // v1.7.0：显示模式三档 + 自动收起（总是显式回传）
+      displayMode: document.getElementById('selDisplayMode').value,
+      autoCollapse: document.getElementById('swAutoCollapse').checked,
       autoDiscover: document.getElementById('swAutoDiscover').checked,
       cloudRelay: document.getElementById('swCloudRelay').checked,
       screenWatch: document.getElementById('swScreenWatch').checked,
@@ -1213,6 +1244,10 @@
     document.getElementById('swRepeatAlert').checked = cfg.repeatAlert !== false;
     // v1.6.3：灯下状态文字（缺省开）
     document.getElementById('swShowStatusText').checked = cfg.showStatusText !== false;
+    // v1.7.0：显示模式（非法/缺省兜底 classic）+ 自动收起（缺省关）
+    document.getElementById('selDisplayMode').value =
+      cfg.displayMode === 'compact' || cfg.displayMode === 'mini' ? cfg.displayMode : 'classic';
+    document.getElementById('swAutoCollapse').checked = cfg.autoCollapse === true;
     document.getElementById('swAutoDiscover').checked = cfg.autoDiscover !== false;
     document.getElementById('swCloudRelay').checked = cfg.cloudRelay === true;
     document.getElementById('swScreenWatch').checked = cfg.screenWatch !== false;

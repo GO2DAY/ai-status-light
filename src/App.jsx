@@ -1,8 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import StatusLight from './components/StatusLight';
+import MiniLight from './components/MiniLight';
 import DetailPanel from './components/DetailPanel';
 import SettingsPanel from './components/SettingsPanel';
-import { setUiLanguage, t as uiT, GEAR_MENU } from './statusMeta';
+import {
+  setUiLanguage,
+  t as uiT,
+  GEAR_MENU,
+  normalizeDisplayMode,
+} from './statusMeta';
+
+/**
+ * v1.7.0 三档显示模式循环顺序：classic → compact → mini → classic。
+ * 模式切换按钮按此循环；迷你灯单击展开回「收起前的模式」（lastExpandedRef）。
+ */
+const MODE_CYCLE = ['classic', 'compact', 'mini'];
 
 /**
  * Plays a short alert tone via the Web Audio API (no audio files needed).
@@ -57,6 +69,8 @@ export default function App() {
     soundVolume: 'high',
     repeatAlert: true,
     showStatusText: true, // v1.6.3 灯下状态文字（缺省开）
+    displayMode: 'classic', // v1.7.0 三档显示模式（缺省 classic，非法兜底 classic）
+    autoCollapse: false, // v1.7.0 自动收起（主进程执行，渲染层只消费 displayMode）
   });
   // v1.5.0 界面语言：状态存在这里只为触发重渲染（文案本身由 statusMeta
   // 模块级 currentLang 提供，setUiLanguage 先行再 setLanguage 触发重绘）。
@@ -66,6 +80,41 @@ export default function App() {
   // v1.6.0 功能五：绿色版「有新版本」小横幅 {version, url}
   const [updateInfo, setUpdateInfo] = useState(null);
   const rootRef = useRef(null);
+
+  // -------------------------------------------------------------------------
+  // v1.7.0 三档显示模式（classic/compact/mini）
+  // -------------------------------------------------------------------------
+  // displayMode 是唯一事实来源（config.settings 持久化，主进程负责窗口尺寸
+  // 换算与自动收起）；渲染层只做两件事：按模式重排 DOM、把用户的选择通过
+  // settings:set 传回主进程（主进程应用尺寸后广播 displayMode:change 对齐）。
+  const displayMode = normalizeDisplayMode(settings.displayMode);
+  // 迷你灯单击要展开回「收起前的模式」：classic/compact 之外不更新。
+  const lastExpandedRef = useRef('classic');
+  useEffect(() => {
+    if (displayMode !== 'mini') lastExpandedRef.current = displayMode;
+  }, [displayMode]);
+
+  /** 切换显示模式：本地乐观更新（不等 IPC 往返），主进程会广播对齐。 */
+  const applyDisplayMode = (mode) => {
+    const next = normalizeDisplayMode(mode);
+    setSettings((prev) => ({ ...prev, displayMode: next }));
+    window.statusLight.setSettings({ displayMode: next });
+  };
+
+  // 模式切换按钮：循环 classic → compact → mini → classic，tooltip 显示下一个模式。
+  const nextDisplayMode = MODE_CYCLE[(MODE_CYCLE.indexOf(displayMode) + 1) % MODE_CYCLE.length];
+
+  // 主进程广播模式变化（含设置窗口保存、自动收起/恢复路径）：对齐本地状态
+  // 并收起所有面板 —— 迷你模式下齿轮菜单/详情/设置面板都不应存在。
+  useEffect(() => {
+    if (!window.statusLight.onDisplayModeChange) return undefined;
+    return window.statusLight.onDisplayModeChange((mode) => {
+      setSettings((prev) => ({ ...prev, displayMode: normalizeDisplayMode(mode) }));
+      setSelectedId(null);
+      setSettingsOpen(false);
+      setGearOpen(false);
+    });
+  }, []);
 
   // Subscribe to state pushes from the main process.
   useEffect(() => {
@@ -181,9 +230,12 @@ export default function App() {
   // (handled by main when setWidth(0) is called) once both panels are closed.
   const PANEL_WIDTH = 380;
   useEffect(() => {
+    // v1.7.0：迷你模式无面板，也不得扰动主进程刚换算好的 40×40 窗口。
+    if (displayMode === 'mini') return undefined;
     const panelOpen = settingsOpen || !!selectedId;
     window.statusLight.setWidth(panelOpen ? PANEL_WIDTH : 0);
-  }, [settingsOpen, selectedId]);
+    return undefined;
+  }, [settingsOpen, selectedId, displayMode]);
 
   const selectedAgent = useMemo(
     () => agents.find((a) => a.id === selectedId) || null,
@@ -295,6 +347,11 @@ export default function App() {
     }
     if (moved && dragStarted) {
       window.statusLight.dragEnd();
+    } else if (pressedId === 'asl-mini') {
+      // v1.7.0：迷你灯单击 = 展开回「收起前的模式」（classic/compact），
+      // 绝不开详情面板 —— 迷你灯不代表任何单一 agent。
+      window.statusLight.hideTooltip();
+      applyDisplayMode(lastExpandedRef.current || 'classic');
     } else if (pressedId) {
       // Treat as a click on the light that received the press.
       window.statusLight.hideTooltip();
@@ -384,6 +441,62 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // v1.7.0 灯条内容（classic 与 compact 共用同一份子元素，仅行高容器不同；
+  // 两个分支都保留完整 className 字面量 —— v1.6.3 布局锚点测试锁定 classic 行）。
+  const stripContent = (
+    <>
+      <div className="flex items-center px-1.5">
+        {agents.map((agent) => (
+          <StatusLight
+            key={agent.id}
+            agent={agent}
+            selected={agent.id === selectedId}
+            showStatusText={settings.showStatusText !== false}
+            compact={displayMode === 'compact'}
+          />
+        ))}
+        {agents.length === 0 ? (
+          <span className="px-2 text-[11px] text-gray-500">{uiT('strip.empty')}</span>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        // Stop the outer strip's drag handler from ever seeing this press,
+        // even if a future pointer-event quirks made the .asl-no-drag check
+        // fail. Without this, in some Chrome/Electron + frameless +
+        // alwaysOnTop combos the click was being eaten before it reached
+        // the gear's onClick handler.
+        onPointerDown={(e) => e.stopPropagation()}
+        // v1.6.0 功能二：单击改弹灯条内下拉菜单（不再直接开内嵌面板）
+        onClick={() => {
+          setSelectedId(null);
+          setSettingsOpen(false);
+          setGearOpen((open) => !open);
+        }}
+        className={`asl-no-drag asl-gear-btn ml-auto flex w-8 items-center justify-center text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-100 ${
+          gearOpen ? 'bg-white/10 text-gray-100' : ''
+        }`}
+        aria-label={uiT('strip.gearAria')}
+        title={uiT('strip.gearTitle')}
+      >
+        ⚙
+      </button>
+      <button
+        type="button"
+        // v1.7.0 三档显示模式切换（循环 classic→compact→mini），tooltip
+        // 显示「下一个模式」名；紧随齿轮之后（齿轮 ml-auto 把右端两颗
+        // 按钮一起推到最右）。
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => applyDisplayMode(nextDisplayMode)}
+        className="asl-no-drag flex w-8 items-center justify-center text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-100"
+        aria-label={uiT('strip.modeAria')}
+        title={uiT(`strip.mode.${nextDisplayMode}`)}
+      >
+        ◐
+      </button>
+    </>
+  );
+
   return (
     <div
       ref={rootRef}
@@ -395,46 +508,20 @@ export default function App() {
       onPointerCancel={handleDragPointerEnd}
       onContextMenu={handleContextMenu}
     >
-      {/* Light strip — v1.6.3 行高 56→72px（h-14→h-[72px]）：灯下新增一行
-          状态词，主进程 ROW_HEIGHT 同步 56→72，两侧必须一致（拖动收起、
-          启动初始高都以 ROW_HEIGHT 为准）。 */}
-      <div className="flex h-[72px] items-stretch bg-[#111827]">
-        <div className="flex items-center px-1.5">
-          {agents.map((agent) => (
-            <StatusLight
-              key={agent.id}
-              agent={agent}
-              selected={agent.id === selectedId}
-              showStatusText={settings.showStatusText !== false}
-            />
-          ))}
-          {agents.length === 0 ? (
-            <span className="px-2 text-[11px] text-gray-500">{uiT('strip.empty')}</span>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          // Stop the outer strip's drag handler from ever seeing this press,
-          // even if a future pointer-event quirks made the .asl-no-drag check
-          // fail. Without this, in some Chrome/Electron + frameless +
-          // alwaysOnTop combos the click was being eaten before it reached
-          // the gear's onClick handler.
-          onPointerDown={(e) => e.stopPropagation()}
-          // v1.6.0 功能二：单击改弹灯条内下拉菜单（不再直接开内嵌面板）
-          onClick={() => {
-            setSelectedId(null);
-            setSettingsOpen(false);
-            setGearOpen((open) => !open);
-          }}
-          className={`asl-no-drag asl-gear-btn ml-auto flex w-8 items-center justify-center text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-100 ${
-            gearOpen ? 'bg-white/10 text-gray-100' : ''
-          }`}
-          aria-label={uiT('strip.gearAria')}
-          title={uiT('strip.gearTitle')}
-        >
-          ⚙
-        </button>
-      </div>
+      {/* v1.7.0 迷你模式：整窗只有一盏聚合小灯（优先级与交互契约见
+          main/mini-mode.js 与 MiniLight.jsx；单击=展开回收起前模式）。 */}
+      {displayMode === 'mini' ? (
+        <MiniLight agents={agents} miniAria={uiT('strip.miniAria')} />
+      ) : displayMode === 'compact' ? (
+        /* v1.7.0 compact（精简）：灯+名称，去状态词行，行高收 56px
+           （v1.6.2 视觉；主进程 ROW_HEIGHT_COMPACT 同步 56）。 */
+        <div className="flex h-[56px] items-stretch bg-[#111827]">{stripContent}</div>
+      ) : (
+        /* Light strip — v1.6.3 行高 56→72px（h-14→h-[72px]）：灯下新增一行
+           状态词，主进程 ROW_HEIGHT 同步 56→72，两侧必须一致（拖动收起、
+           启动初始高都以 ROW_HEIGHT 为准）。 */
+        <div className="flex h-[72px] items-stretch bg-[#111827]">{stripContent}</div>
+      )}
 
       {/* v1.6.0 齿轮下拉菜单：灯条内浮层，宽度 << 灯条宽，不调 setWidth
           —— 不裁灯契约（panelWindowWidth max 语义）天然满足 */}
@@ -457,8 +544,10 @@ export default function App() {
         </div>
       ) : null}
 
-      {/* v1.6.0 功能五：绿色版「有新版本」小横幅（主进程派发；点击开 Releases） */}
-      {updateInfo ? (
+      {/* v1.6.0 功能五：绿色版「有新版本」小横幅（主进程派发；点击开 Releases）
+          v1.7.0：迷你模式下不渲染（横幅会把 40px 小窗撑高），回到
+          classic/compact 时恢复显示。 */}
+      {displayMode !== 'mini' && updateInfo ? (
         <button
           type="button"
           className="asl-no-drag w-full border-t border-amber-500/30 bg-amber-500/10 px-2 py-1 text-left text-[11px] text-amber-300 transition-colors hover:bg-amber-500/20"
@@ -471,8 +560,9 @@ export default function App() {
         </button>
       ) : null}
 
-      {/* Expandable panels */}
-      {selectedAgent ? (
+      {/* Expandable panels — v1.7.0：迷你模式面板一律不渲染（双保险，
+          displayMode:change 广播到达时已强制收起）。 */}
+      {displayMode !== 'mini' && selectedAgent ? (
         <DetailPanel
           agent={selectedAgent}
           onClose={() => setSelectedId(null)}
@@ -480,7 +570,7 @@ export default function App() {
           onAck={handleAck}
         />
       ) : null}
-      {settingsOpen ? (
+      {displayMode !== 'mini' && settingsOpen ? (
         <SettingsPanel
           agents={agents}
           settings={settings}

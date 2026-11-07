@@ -11,12 +11,26 @@ import '../main/strip-name';
 // v1.6.0：齿轮菜单定义。src/ 消费 window.ASL_* 的唯一锚点是本文件
 // （QA 闸口 qa-v152-adversarial 锁死），App.jsx 一律从这里转口。
 import '../main/gear-menu';
+// v1.7.0：迷你模式聚合灯（MINI_WINDOW / MINI_PRIORITY / aggregateStatus），
+// 同样走 UMD 双通道，node 单测 require、渲染层走 window.ASL_MINI_MODE。
+import '../main/mini-mode';
 
 const I18N = window.ASL_I18N;
 const STRIP = window.ASL_STRIP_NAME;
 
 /** 齿轮下拉菜单定义（main/gear-menu.js，UMD 双通道挂 window）。 */
 export const GEAR_MENU = window.ASL_GEAR_MENU;
+
+/** 迷你模式聚合灯定义（main/mini-mode.js，UMD 双通道挂 window）。 */
+export const MINI_MODE = window.ASL_MINI_MODE;
+
+/** 显示模式三档（v1.7.0）。非法值兜底 classic —— 与 settings-ops 同规则。 */
+export const DISPLAY_MODES = ['classic', 'compact', 'mini'];
+
+/** 规范化显示模式：非 classic/compact/mini 一律回 classic。 */
+export function normalizeDisplayMode(mode) {
+  return DISPLAY_MODES.includes(mode) ? mode : 'classic';
+}
 
 /** 当前界面语言（App.jsx 在用户切换时调用设置；默认中文）。 */
 let currentLang = 'zh-CN';
@@ -80,6 +94,16 @@ export const STATUS_META = {
 /** 状态文案（当前语言，tooltip/详情面板用长文案）。 */
 export function statusLabel(status) {
   return t(`status.${status || 'offline'}`);
+}
+
+/**
+ * 迷你灯聚合状态（v1.7.0）：assist(紫) > stuck(红) > running(绿闪) >
+ * idle(绿不闪) > 全 offline(灰)。实现在 main/mini-mode.js（纯函数，可单测）。
+ * @param {Array<string>} statuses
+ * @returns {string}
+ */
+export function aggregateStatus(statuses) {
+  return MINI_MODE.aggregateStatus(statuses);
 }
 
 /**
