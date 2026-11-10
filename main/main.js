@@ -449,6 +449,8 @@ function serializeAgents() {
       status,
       auto: status !== a.status,
       task: a.task,
+      // v1.7.0 rev4：出问题的对话名（可选，详情面板/电话告警/手机快照共用）
+      ...(a.thread ? { thread: a.thread } : {}),
       lastHeartbeat: a.lastHeartbeat,
       dialogs: dialogsMap[a.id] || [],
       ...(stale ? { stale: true } : {}),
@@ -651,14 +653,24 @@ function applyReport(body) {
   const prevStatus = agent.status;
   agent.status = status;
   if (typeof body.task === 'string') agent.task = body.task.slice(0, 500);
+  // v1.7.0 rev4 对话溯源（老吴需求：上报时讲清是哪个对话出问题）：
+  // 可选 thread 字段 = 出问题的对话/线程名，详情面板红紫灯高亮显示，
+  // 电话告警 webhook 消息也附带，手机端 MQTT 快照透传。不上报则保持旧值。
+  if (typeof body.thread === 'string') agent.thread = body.thread.slice(0, 200);
   // An explicit "offline" clears the heartbeat so timeouts don't resurrect it.
   agent.lastHeartbeat = status === 'offline' ? 0 : Date.now();
   // v1.5.1 webhook 电话告警：assist/stuck 边沿触发（applyReport 是状态落入
   // 紫/红的唯一路径——watcher/心跳只会写 idle/offline，ack 只会解除）。
   // fire-and-forget，失败只记日志，绝不影响状态机。
+  // v1.7.0 rev4：电话里也要说清是哪个对话（thread 不在 task 里才附加，防重复）。
+  // 合并在 try 之前完成——qa-v151 锚定「try { 紧跟 maybeAlert 调用」不许松动。
+  const webhookTask =
+    agent.thread && !(agent.task || '').includes(agent.thread)
+      ? `${agent.task || ''}（对话：${agent.thread}）`.trim()
+      : agent.task;
   try {
     alertWebhook.maybeAlert(
-      id, prevStatus, agent.status, agent.task, configExtra.alertWebhook, agent.name
+      id, prevStatus, agent.status, webhookTask, configExtra.alertWebhook, agent.name
     );
   } catch (err) {
     logError(`alert webhook dispatch failed: ${err && err.message}`);

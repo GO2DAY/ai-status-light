@@ -15,9 +15,31 @@ import { STATUS_META, statusLabel, formatRelativeTime, t } from '../statusMeta';
 export default function DetailPanel({ agent, onClose, onRemove, onAck }) {
   const meta = STATUS_META[agent.status] || STATUS_META.offline;
   const heartbeatDate = agent.lastHeartbeat ? new Date(agent.lastHeartbeat) : null;
+  // v1.7.0 rev4 对话溯源（老吴需求）：红/紫灯时高亮「出问题的对话」，
+  // 取值优先级 thread 上报字段 > 活跃对话标题 > task 文案。
+  const isAttention = agent.status === 'stuck' || agent.status === 'assist';
+  const activeDialog =
+    Array.isArray(agent.dialogs) ? agent.dialogs.find((d) => d && d.active) : null;
+  const problemSource = agent.thread || (activeDialog && activeDialog.title) || agent.task || '';
 
   return (
     <div className="asl-no-drag border-t border-white/10 bg-[#111827] px-3 py-2.5">
+      {isAttention ? (
+        <div
+          className={`mb-2 flex items-start gap-2 rounded-md px-2 py-1.5 text-[12px] font-semibold ${
+            agent.status === 'assist'
+              ? 'bg-purple-500/20 text-purple-200'
+              : 'bg-red-500/20 text-red-200'
+          }`}
+          data-testid="problem-dialog"
+        >
+          <span className="shrink-0">{agent.status === 'assist' ? '🟣' : '🔴'}</span>
+          <span className="min-w-0 break-words">
+            {t('detail.problemDialog')}
+            {problemSource ? `：${problemSource}` : ''}
+          </span>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className={`block h-3 w-3 rounded-full ${meta.dot}`} />
