@@ -229,8 +229,9 @@ test('源码锚定：main.js 迁移/回退分支与我复刻的语义一致', ()
 // ===========================================================================
 
 test('buildTopics 契约：合法派生、尾斜杠清理、非法回退默认', () => {
+  // v1.7.0 rev5：cmd 主题加入派生契约（手机端灯管理远程指令）
   assert.deepStrictEqual(buildTopics('asl/abc123'), {
-    statusTopic: 'asl/abc123/status', stateTopic: 'asl/abc123/state',
+    statusTopic: 'asl/abc123/status', stateTopic: 'asl/abc123/state', cmdTopic: 'asl/abc123/cmd',
   });
   assert.deepStrictEqual(buildTopics('asl/abc123///').stateTopic, 'asl/abc123/state');
   for (const bad of ['', null, undefined, 123, 'no-slash', 'asl/', '/onlysuffix', 'a b/c']) {
@@ -246,7 +247,8 @@ test('重新生成后：旧桥 stop 立即停发，新连接订阅新主题，�
     () => {}, () => {}, () => enabledRef.current, () => baseRef.current
   );
   fakeClient.emit('connect');
-  assert.deepStrictEqual(subscribeCalls, ['asl/oldbase1111/status'], '未订阅旧主题');
+  // v1.7.0 rev5：cmd 主题与 status 一起订阅（手机端灯管理远程指令）
+  assert.deepStrictEqual(subscribeCalls, ['asl/oldbase1111/status', 'asl/oldbase1111/cmd'], '未订阅旧主题');
   // 发一份快照（首发立即走 doPublish，不节流）
   bridge.publishState([{ id: 'a', status: 'idle' }]);
   assert.strictEqual(publishCalls.length, 1);
@@ -266,7 +268,7 @@ test('重新生成后：旧桥 stop 立即停发，新连接订阅新主题，�
   baseRef.current = 'asl/newbase2222';
   const bridge2 = startMqttBridge(() => {}, () => {}, () => true, () => baseRef.current);
   fakeClient.emit('connect');
-  assert.deepStrictEqual(subscribeCalls, ['asl/newbase2222/status'], '新桥未订阅新主题');
+  assert.deepStrictEqual(subscribeCalls, ['asl/newbase2222/status', 'asl/newbase2222/cmd'], '新桥未订阅新主题');
   bridge2.publishState([{ id: 'a', status: 'idle' }]);
   assert.strictEqual(publishCalls[0].topic, 'asl/newbase2222/state', '新桥快照未发新主题');
   bridge2.stop();

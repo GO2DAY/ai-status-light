@@ -28,8 +28,10 @@ const mqtt = require('mqtt');
 
 // v1.5.0 脱敏：主题前缀不再硬编码，改为每台机器随机生成、存 config.json
 // （顶层 mqttTopic，形如 asl/<12 位随机字符>），由 main.js 经 getTopicBase
-// 回调传入；本模块只负责 "<base>/status"（订阅上报）与 "<base>/state"
-//（发布快照，QoS0 + retain）两个派生主题。
+// 回调传入；本模块负责三个派生主题："<base>/status"（订阅上报）、
+// "<base>/state"（发布快照，QoS0 + retain）、"<base>/cmd"（订阅远程指令，
+// v1.7.0 rev5：手机端「灯管理」的 remove-agent 指令；add-agent 直接走
+// status 报文即可建档，无需专用指令）。
 // 主题名即凭据：泄露的后果 = 别人能伪造灯的状态显示，不能触碰本机任何文件。
 const BROKER_URL = 'mqtts://broker.emqx.io:8883';
 
@@ -56,7 +58,7 @@ function normalizeBrokerUrl(url) {
 function buildTopics(base) {
   const cleaned = typeof base === 'string' ? base.trim().replace(/\/+$/, '') : '';
   const b = /^[a-z0-9]+\/[a-z0-9_-]+$/i.test(cleaned) ? cleaned : DEFAULT_TOPIC_BASE;
-  return { statusTopic: `${b}/status`, stateTopic: `${b}/state` };
+  return { statusTopic: `${b}/status`, stateTopic: `${b}/state`, cmdTopic: `${b}/cmd` };
 }
 
 const STATE_PUBLISH_THROTTLE_MS = 500; // 高频变化（多 agent 同秒上报）合并发一次
@@ -76,8 +78,10 @@ const FAIL_LOG_EVERY = 12; // 每 12 次连接失败写一次日志（约 1~10 �
  * @param {() => string} [getBrokerUrl] broker 地址回调（v1.6.0，读
  *   config.json 的 mqttBroker；connect 时现取，改配置随重连生效。
  *   缺省/非法用 BROKER_URL 公共默认）
+ * @param {(action: string, agentId: string) => void} [onCommand] 远程指令回调
+ *   （v1.7.0 rev5，收到 "<base>/cmd" 主题消息时触发，main.js 传灯管理处理）
  */
-function startMqttBridge(onReport, log, isEnabled, getTopicBase, getBrokerUrl) {
+function startMqttBridge(onReport, log, isEnabled, getTopicBase, getBrokerUrl, onCommand) {
   let client = null;
   let reconnectMs = RECONNECT_MIN_MS;
   let failCount = 0;
@@ -145,10 +149,14 @@ function startMqttBridge(onReport, log, isEnabled, getTopicBase, getBrokerUrl) {
     client.on('connect', () => {
       reconnectMs = RECONNECT_MIN_MS;
       failCount = 0;
-      const { statusTopic } = currentTopics();
-      console.log(`[status-light] mqtt bridge connected, subscribing ${statusTopic}`);
+      const { statusTopic, cmdTopic } = currentTopics();
+      console.log(`[status-light] mqtt bridge connected, subscribing ${statusTopic} + ${cmdTopic}`);
       client.subscribe(statusTopic, { qos: 0 }, (err) => {
         if (err) log(`mqtt subscribe failed: ${err.message}`);
+      });
+      // v1.7.0 rev5：手机端「灯管理」远程指令主题（remove-agent）
+      client.subscribe(cmdTopic, { qos: 0 }, (err) => {
+        if (err) log(`mqtt cmd subscribe failed: ${err.message}`);
       });
       // 断线重连成功：补发一次最新快照（retain 兜底冷启动订阅者，
       // 主动补发让当前在线的订阅者立刻对齐到最新灯态）。
@@ -158,13 +166,28 @@ function startMqttBridge(onReport, log, isEnabled, getTopicBase, getBrokerUrl) {
     client.on('message', (topic, payload) => {
       // cloudRelay 是整条云端中继通道的 kill-switch：发布侧在 doPublish 里
       // 拦截，接收侧必须在这里对称拦截 —— 开关关掉后云 AI 的消息绝不允许
-      // 再进 applyReport 改变灯状态。
+      // 再进 applyReport 改变灯状态（cmd 指令同样拦截）。
       if (isEnabled && !isEnabled()) return;
       let body;
       try {
         body = JSON.parse(payload.toString('utf-8'));
       } catch {
         return; // 垃圾消息直接丢
+      }
+      // v1.7.0 rev5：远程指令主题（手机端灯管理）。目前仅支持 remove-agent；
+      // add-agent 不需要指令——直接向 status 主题发一条 offline 报文即可建档。
+      const { cmdTopic } = currentTopics();
+      if (topic === cmdTopic) {
+        if (typeof onCommand !== 'function') return;
+        const agentId = typeof body.agent === 'string' ? body.agent.trim() : '';
+        if (body.action === 'remove-agent' && agentId) {
+          try {
+            onCommand('remove-agent', agentId);
+          } catch (err) {
+            log(`mqtt cmd apply failed: ${err && err.message}`);
+          }
+        }
+        return;
       }
       try {
         onReport(body); // applyReport 内部有完整字段校验

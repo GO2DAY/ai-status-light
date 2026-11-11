@@ -193,11 +193,12 @@ test('重连补发：断线期间的快照不发，再次 connect 时补发最�
 // 主题配置化（v1.5.0 脱敏）：主题前缀来自 getTopicBase 回调，不再硬编码
 // ---------------------------------------------------------------------------
 
-test('订阅/发布主题均由 getTopicBase 派生（asl/<base>/status|state）', () => {
+test('订阅/发布主题均由 getTopicBase 派生（asl/<base>/status|state，rev5 增 cmd）', () => {
   const enabledRef = { current: true };
   const baseRef = { current: 'asl/mach1ne00001' };
   const { bridge } = makeBridge(enabledRef, baseRef);
-  assert.deepStrictEqual(subscribeCalls, ['asl/mach1ne00001/status']);
+  // v1.7.0 rev5：手机端灯管理远程指令通道，cmd 主题与 status 一起订阅
+  assert.deepStrictEqual(subscribeCalls, ['asl/mach1ne00001/status', 'asl/mach1ne00001/cmd']);
   bridge.publishState([{ id: 'a', status: 'idle', task: '', lastHeartbeat: 1 }]);
   assert.strictEqual(publishCalls[0].topic, 'asl/mach1ne00001/state');
   bridge.stop();
@@ -221,9 +222,11 @@ test('运行中换主题：getTopicBase 返回新值后，下一条快照发到�
 });
 
 test('buildTopics：非法前缀回退默认；尾斜杠容忍', () => {
+  // v1.7.0 rev5：新增 cmd 主题派生（手机端灯管理 remove-agent 指令）
   assert.deepStrictEqual(buildTopics('asl/abc123'), {
     statusTopic: 'asl/abc123/status',
     stateTopic: 'asl/abc123/state',
+    cmdTopic: 'asl/abc123/cmd',
   });
   assert.strictEqual(buildTopics('asl/abc123/').stateTopic, 'asl/abc123/state');
   assert.strictEqual(buildTopics('').stateTopic, `${DEFAULT_TOPIC_BASE}/state`);

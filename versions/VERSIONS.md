@@ -360,6 +360,16 @@
 
 ---
 
+## v1.7.0 rev5（2026-11-11）—— 手机端灯管理远程指令通道（AI哨兵 v2.3 配套）
+
+**变更**（老吴需求：手机端可以给电脑红绿灯加灯/删灯）：
+- **mqtt-bridge.js**：buildTopics 新增第三派生主题 `<base>/cmd`；连接时与 status 一起订阅；收侧路由 cmd 主题到新回调 `onCommand(action, agentId)`，仅放行 `{action:'remove-agent', agent:<非空>}`。cloudRelay kill-switch 对 cmd 同样拦截（对称性）。**加灯不需要指令**——直接向 `<base>/status` 发一条 offline 报文，applyReport 的 upsertAgent 自动建档
+- **main.js**：startCloudBridge 把 onCommand 接到 removeAgent（主题名即凭据，风险与伪造灯状态等价）
+- **测试**：新增 tests/v170-rev5-remote-cmd.test.js 锚点锁（cmd 派生/订阅/校验/kill-switch 先于 cmd 路由/仅 remove-agent）；mqtt-bridge.test.js 与 qa-v150-adversarial.test.js 的订阅契约断言更新为 [status, cmd] 双订阅（有意契约变更，未绕断言）。全量 31 个测试文件全绿
+- **真机联调**：vivo X80 手机端 AI哨兵 v2.3「灯管理」同款报文 → kimi 加灯成功（灰灯建档）→ remove-agent 删灯成功（快照回落）
+
+---
+
 ## v1.7.0（2026-11-07）—— 三档显示模式（经典/精简/迷你）+ 自动收起
 
 **变更**（老吴需求：72px 灯条遮挡屏幕内容，先做迷你聚合灯，迭代中升级为三档模式）：

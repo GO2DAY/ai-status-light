@@ -1570,7 +1570,14 @@ function startCloudBridge() {
       () => configExtra.mqttTopic,
       // v1.6.0 功能四：broker 地址从 config 读，connect 时现取，
       // 面板改配置随重连生效（保存时若变化会主动重启桥，见 settingsPanel:save）。
-      () => configExtra.mqttBroker
+      () => configExtra.mqttBroker,
+      // v1.7.0 rev5：手机端「灯管理」远程指令（add 走 status 报文自动建档，
+      // remove 走 cmd 主题）。主题名即凭据，风险与伪造灯状态等价。
+      (action, agentId) => {
+        if (action === 'remove-agent') {
+          removeAgent(agentId);
+        }
+      }
     );
   } catch (err) {
     logError(`failed to start mqtt bridge: ${err.message}`);
