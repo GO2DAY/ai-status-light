@@ -13,3 +13,5 @@ build-v*.log
 doubao_assist_notify.py
 .workbuddy/
 .DS_Store
+release/
+release-v170-tmp/
