@@ -69,7 +69,9 @@
     'strip.mode.mini': '迷你模式',
     'strip.modeAria': '切换显示模式',
     // v1.7.0 迷你灯 aria（聚合灯不代表单一 agent）
-    'strip.miniAria': 'AI 状态（迷你模式，点击展开）',
+    'strip.miniAria': 'AI 状态（迷你模式，点击展开，按住可拖动）',
+    // v1.7.0 rev7：拖动把手 tooltip（老吴反馈「不知道哪里能拖」）
+    'strip.dragTitle': '拖动把手：按住即可移动灯条（整条都能拖）',
     // v1.6.3 灯下状态文字：短词版状态文案（tooltip/详情用 status.* 长文案，
     // 灯条 52px 宽度下只能放短词，故单独一套 key）
     'strip.status.running': '运行中',
@@ -301,7 +303,9 @@
     'strip.mode.compact': 'Compact mode',
     'strip.mode.mini': 'Mini mode',
     'strip.modeAria': 'Switch display mode',
-    'strip.miniAria': 'AI status (mini mode, click to expand)',
+    'strip.miniAria': 'AI status (mini mode, click to expand, hold to drag)',
+    // v1.7.0 rev7: drag-handle tooltip (feedback: "can't tell where to drag")
+    'strip.dragTitle': 'Drag handle: hold to move the strip (the whole strip is draggable)',
     // v1.6.3 status text under lights (short words — strip is only 52px wide)
     'strip.status.running': 'Running',
     'strip.status.idle': 'Idle',

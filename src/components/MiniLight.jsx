@@ -1,5 +1,6 @@
 import React from 'react';
 import { MINI_MODE, aggregateStatus } from '../statusMeta';
+import GripIcon from './GripIcon';
 
 /**
  * 迷你模式的聚合小灯（v1.7.0）：整窗收成一盏圆灯，几乎不遮挡内容。
@@ -60,13 +61,24 @@ function MiniLight({ agents, miniAria }) {
   const status = aggregateStatus((agents || []).map((a) => a && a.status));
   const meta = MINI_DOT_META[status] || MINI_DOT_META.offline;
   return (
-    <div className="flex h-10 w-10 items-center justify-center bg-[#111827]" data-mini="true">
+    // v1.7.0 rev7（老吴反馈）：副屏上窗口被 OS 最小尺寸钳到 ~70×56，旧版
+    // 写死 40×40 的芯片缩在左上角、右下一片空 —— 现在撑满整个窗口并居中，
+    // 外框（圆角芯片）与灯点永远同心，窗口多大都能自适应。
+    <div
+      className="group relative flex h-screen w-screen items-center justify-center bg-[#111827]"
+      data-mini="true"
+    >
+      {/* 拖动把手徽标：悬停时左上角浮现（老吴反馈「不知道哪里能拖」）。
+          纯视觉指示 pointer-events:none，拖动仍走整芯片统一指针处理。 */}
+      <span className="pointer-events-none absolute left-1 top-1 text-gray-500 opacity-0 transition-opacity group-hover:opacity-80">
+        <GripIcon size={9} />
+      </span>
       <button
         type="button"
         data-agent-id="asl-mini"
         aria-label={miniAria}
         title=""
-        className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-white/5"
+        className="flex h-full w-full cursor-move items-center justify-center transition-colors hover:bg-white/5"
       >
         <span
           className={`block rounded-full ring-2 ${meta.dot} ${meta.ring} ${meta.glow} ${MINI_LIGHT_CLASS}`}

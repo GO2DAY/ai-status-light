@@ -505,7 +505,8 @@ function currentDisplayMode() {
 /** 三档模式的窗口基准尺寸：mini=40×40，compact=灯条全宽×56，classic=灯条全宽×72。 */
 function baseWindowSizeForMode(mode) {
   if (mode === 'mini') {
-    return { width: miniMode.MINI_WINDOW, height: miniMode.MINI_WINDOW };
+    // rev6c：mini 基准用「采纳后的实际尺寸」——副屏被 OS 钳制时以钳后为准
+    return miniBaseSize();
   }
   if (mode === 'compact') {
     return { width: computeWidth(), height: ROW_HEIGHT_COMPACT };
@@ -534,6 +535,133 @@ function applyDisplayModeSize() {
   windowPosition = { x: snapped.x, y: snapped.y };
   mainWindow.webContents.send('displayMode:change', currentDisplayMode());
   saveConfig();
+}
+
+// ---------------------------------------------------------------------------
+// v1.7.0 rev6 跨屏 DPI 自适应（老吴实测：把灯拖到副屏后迷你灯被放大、
+// 布局破 —— 副屏缩放比与主屏不同）。根因：窗口常态 setResizable(false)，
+// Windows 对不可拉伸窗口不派发 WM_DPICHANGED 的建议尺寸，跨屏后渲染器
+// 仍按旧屏 DPI 布局。解法：拖动结束 / 显示器指标变化时比对 scaleFactor，
+// 发现跨 DPI 就强制按当前模式基准尺寸重发布局（±1px 抖动逼 DWM 重新
+// 生成窗口 rect，Chromium 按新屏 deviceScale 重排）。
+// ---------------------------------------------------------------------------
+let lastKnownScaleFactor = null;
+
+// rev6c：mini 灯的「就地采纳」尺寸。Windows 对无标题栏窗口有最小尺寸钳制
+// （本机实测约 70×56 物理像素）：主屏 150% 缩放下 40DIP=60物理+边框刚好够，
+// mini 正常；副屏 100% 缩放下 40×40 物理低于下限，系统直接把窗口弹成
+// 70×56 —— 应用怎么 setBounds 都会被弹回（之前误判为「DPI 上下文坏死」，
+// 还引发了「体检不符→重建→又被钳→再体检」的 748 次重建死循环=狂闪）。
+// 正解：系统钳成多大就认多大当 mini 基准，不对抗、不重建。
+let miniAdoptedSize = null;
+
+function miniBaseSize() {
+  return miniAdoptedSize || { width: miniMode.MINI_WINDOW, height: miniMode.MINI_WINDOW };
+}
+
+function adoptMiniSizeIfClamped() {
+  if (!mainWindow || mainWindow.isDestroyed() || !isMiniMode()) return false;
+  const [w, h] = mainWindow.getSize();
+  const base = miniBaseSize();
+  if ((w > base.width + 2 || h > base.height + 2) && w <= 200 && h <= 200) {
+    // 只有「轻微放大」（OS 钳制的特征）才采纳；大得离谱的属于别的 bug，不认
+    miniAdoptedSize = { width: w, height: h };
+    logError(`dpi-sync: mini size clamped by OS to ${w}x${h} (requested ${base.width}x${base.height}), adopted as new mini base`);
+    return true;
+  }
+  return false;
+}
+
+function displayScaleOfWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  try {
+    return screen.getDisplayMatching(mainWindow.getBounds()).scaleFactor;
+  } catch (e) {
+    return null;
+  }
+}
+
+function forceRelayoutAtCurrentDpi() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { width, height } = baseWindowSizeForMode(currentDisplayMode());
+  const [x, y] = mainWindow.getPosition();
+  mainWindow.setResizable(true);
+  mainWindow.setBounds({ x, y, width: width + 1, height });
+  mainWindow.setBounds({ x, y, width, height });
+  mainWindow.setResizable(false);
+  try { mainWindow.webContents.invalidate(); } catch (e) { /* best effort */ }
+}
+
+/**
+ * rev6 终极手段：跨 DPI 后 setBounds 抖动救不回来时（DWM 对这个 HWND 的
+ * DPI 虚拟化上下文已经坏死，实测重启进程都不自愈），直接销毁重建窗口。
+ * 新 HWND = 全新 per-monitor DPI 上下文，尺寸/渲染必然正确。
+ * 落点：原显示器工作区右上角（可预测、必可见）；用户随后可拖回喜欢的位置。
+ *
+ * 熔断器（rev6b）：重建 60 秒内最多 2 次。若重建后尺寸仍不对，说明根因
+ * 不是 DPI 上下文而是别的路径在改尺寸——继续重建只会变成「每 400ms 闪一次
+ * 窗口」的死循环（2026-11-11 实测 748 次重建、灯条狂闪点不了），超限后
+ * 改走 setBounds 兜底并停手，把窗口留给用户能点能关。
+ */
+const RECREATE_WINDOW_MS = 60_000;
+const RECREATE_MAX_PER_WINDOW = 2;
+let recreateTimestamps = [];
+
+function recreateBudgetAvailable() {
+  const now = Date.now();
+  recreateTimestamps = recreateTimestamps.filter((t) => now - t < RECREATE_WINDOW_MS);
+  return recreateTimestamps.length < RECREATE_MAX_PER_WINDOW;
+}
+
+function recreateMainWindowAtCurrentSpot() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!recreateBudgetAvailable()) {
+    logError('dpi-sync: recreate budget exhausted, falling back to setBounds (no more flashing)');
+    forceRelayoutAtCurrentDpi();
+    return;
+  }
+  recreateTimestamps.push(Date.now());
+  let anchor = null;
+  try {
+    const [x, y] = mainWindow.getPosition();
+    const mode = currentDisplayMode();
+    const { width } = baseWindowSizeForMode(mode);
+    const disp = screen.getDisplayNearestPoint({ x: x + Math.floor(width / 2), y: y + 8 });
+    const wa = disp.workArea;
+    anchor = { x: wa.x + wa.width - width - 12, y: wa.y + 12 };
+  } catch (e) { anchor = null; }
+  // 先建新窗、再销毁旧窗 —— 中间不能出现「零窗口」瞬间：
+  // destroy 旧窗会触发 window-all-closed → quitApp，把整个应用带走
+  //（实测：先 destroy 再 create，应用直接退出）。
+  const old = mainWindow;
+  mainWindow = null; // 放行 createWindow 的幂等守卫
+  if (anchor) windowPosition = anchor;
+  createWindow();
+  try { old.destroy(); } catch (e) { /* ignore */ }
+  logError(`dpi-sync: window recreated for clean DPI context (anchor=${JSON.stringify(windowPosition)})`);
+}
+
+function reapplyModeSizeWhenSafe(attempt) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (dragContext) {
+    // 拖动还没松手：等 dragEnd 收口后再重排（最多等 3 秒）
+    if (attempt < 30) setTimeout(() => reapplyModeSizeWhenSafe(attempt + 1), 100);
+    return;
+  }
+  recreateMainWindowAtCurrentSpot();
+}
+
+function syncWindowScaleAfterMove(startScale) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const scale = displayScaleOfWindow();
+  if (scale === null) return;
+  const before = typeof startScale === 'number' ? startScale : lastKnownScaleFactor;
+  lastKnownScaleFactor = scale;
+  if (before === null || scale === before) return;
+  logError(`dpi-sync: scaleFactor ${before} → ${scale}, force relayout (${currentDisplayMode()})`);
+  // rev6c：换屏=换钳制上下文，旧采纳尺寸作废（新屏上重新采纳）
+  miniAdoptedSize = null;
+  reapplyModeSizeWhenSafe(0);
 }
 
 /**
@@ -732,6 +860,11 @@ function setMainWindowBounds({ x, y, width, height }) {
   ) {
     return;
   }
+  // rev6b 诊断：任何真实改尺寸的调用都留痕（定位「40×40 被改成 70×56」是谁干的）
+  if (bounds.width !== currentWidth || bounds.height !== currentHeight) {
+    const stack = (new Error().stack || '').split('\n').slice(2, 5).join(' | ');
+    logError(`size-trace: ${currentWidth}x${currentHeight} -> ${bounds.width}x${bounds.height} mode=${currentDisplayMode()} drag=${!!dragContext} at ${stack}`);
+  }
   if (dragContext) {
     // Strict no-resize mode: only position is allowed to move, size stays
     // pinned at dragStart's baseWidth/baseHeight so the user can never end
@@ -842,6 +975,19 @@ function createWindow() {
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.setMenu(null);
 
+  // rev6b 采样探针：记录新窗口尺寸的初始演化（定位 40×40 → 70×56 的变身时刻）
+  if (process.env.ASL_SIZE_PROBE) { // rev6b 采样探针（诊断用，默认关）
+    const born = Date.now();
+    for (const delay of [0, 150, 300, 600, 1000]) {
+      setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        const [w, h] = mainWindow.getSize();
+        const [px, py] = mainWindow.getPosition();
+        logError(`size-probe: +${Date.now() - born}ms size=${w}x${h} pos=(${px},${py})`);
+      }, delay);
+    }
+  }
+
   // Some Win11 frameless+alwaysOnTop combos default to a hidden window even
   // when show:true. Force-show + restore so the overlay is visible from t=0.
   if (!mainWindow.isVisible()) mainWindow.show();
@@ -859,7 +1005,32 @@ function createWindow() {
     const [x, y] = mainWindow.getPosition();
     windowPosition = { x, y };
     saveConfig();
+    // rev6：非拖动路径的移动（吸附兜底/系统移动）也做 DPI 同步检查
+    if (!dragContext) syncWindowScaleAfterMove(null);
   });
+
+  // rev6：显示器缩放比/分辨率变化（设置里改缩放、拔插屏）→ 重排
+  screen.on('display-metrics-changed', () => {
+    setTimeout(() => syncWindowScaleAfterMove(null), 150);
+  });
+  lastKnownScaleFactor = displayScaleOfWindow();
+  // rev6c：启动 400ms 后体检一次。mini 被系统最小尺寸钳制 → 采纳为基准
+  //（不再重建——重建后照样被钳，只会变成「体检不符→重建→又被钳」的
+  // 死循环，2026-11-11 实测 748 次重建=灯条狂闪）。非 mini 或尺寸大得
+  // 异常时才走预算化重建兜底。
+  setTimeout(() => {
+    if (dragContext || !mainWindow || mainWindow.isDestroyed()) return;
+    if (adoptMiniSizeIfClamped()) {
+      try { mainWindow.webContents.invalidate(); } catch (e) { /* best effort */ }
+      return;
+    }
+    const target = baseWindowSizeForMode(currentDisplayMode());
+    const [w, h] = mainWindow.getSize();
+    if (Math.abs(w - target.width) > 2 || Math.abs(h - target.height) > 2) {
+      logError(`dpi-sync: startup size ${w}x${h} != ${target.width}x${target.height}, recreating`);
+      recreateMainWindowAtCurrentSpot();
+    }
+  }, 400);
 
   const distIndex = path.join(__dirname, '..', 'dist', 'index.html');
   if (!process.env.ASL_DEV && fs.existsSync(distIndex)) {
@@ -1027,6 +1198,8 @@ function startHttpServer() {
           cursorY: cur.y,
           baseWidth,
           baseHeight,
+          // rev6：记住拖动起点的屏幕缩放比，dragEnd 时比对是否跨了 DPI 屏
+          scaleAtStart: displayScaleOfWindow(),
         };
         return sendJson(res, 200, { ok: true, baseWidth, baseHeight });
       }
@@ -1059,7 +1232,10 @@ function startHttpServer() {
         });
         windowPosition = { x: snapped.x, y: snapped.y };
         saveConfig();
+        // rev6：跨 DPI 屏拖动收口 —— 比对起点/终点缩放比，跨了就强制重排
+        const startScale = dragContext.scaleAtStart;
         dragContext = null;
+        syncWindowScaleAfterMove(startScale);
         return sendJson(res, 200, { ok: true });
       }
       // Debug: synthetically click the gear button from inside the renderer
@@ -1260,6 +1436,13 @@ ipcMain.handle('settings:set', (_event, payload) => {
 
 ipcMain.on('window:setHeight', (_event, height) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  // v1.7.0 rev6c：mini 模式高度恒为基准（副屏上可能是 OS 钳后的 56），
+  // 渲染层 ResizeObserver 的 classic 高度噪音不许改它——否则设 40 又被
+  // 系统弹回 56，来回打架。
+  if (isMiniMode()) {
+    resizeWindowToAgents();
+    return;
+  }
   const clamped = Math.max(MIN_PANEL_HEIGHT, Math.min(MAX_PANEL_HEIGHT, Math.round(height)));
   setMainWindowBounds({ height: clamped });
 });

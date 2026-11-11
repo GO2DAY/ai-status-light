@@ -3,6 +3,7 @@ import StatusLight from './components/StatusLight';
 import MiniLight from './components/MiniLight';
 import DetailPanel from './components/DetailPanel';
 import SettingsPanel from './components/SettingsPanel';
+import GripIcon from './components/GripIcon';
 import {
   setUiLanguage,
   t as uiT,
@@ -447,6 +448,15 @@ export default function App() {
   // 两个分支都保留完整 className 字面量 —— v1.6.3 布局锚点测试锁定 classic 行）。
   const stripContent = (
     <>
+      {/* v1.7.0 rev7（老吴反馈「不知道哪里能拖」）：灯条最左侧常驻拖动把手列。
+          纯视觉指示（无 onClick、不拦指针），拖动仍由根节点统一指针处理 ——
+          其实整条灯条都能拖，把只是让「能拖」看得见。 */}
+      <span
+        className="flex w-4 shrink-0 items-center justify-center text-gray-500 select-none"
+        title={uiT('strip.dragTitle')}
+      >
+        <GripIcon size={10} />
+      </span>
       <div className="flex items-center px-1.5">
         {agents.map((agent) => (
           <StatusLight
