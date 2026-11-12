@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 
 /** 应用版本号（窗口标题/语言包插值共用，升级只改这里）。 */
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 
 const HTTP_PORT = 17890;
 const HTTP_HOST = '127.0.0.1';
@@ -2574,6 +2574,40 @@ if (!gotLock) {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // rev8: 每日低峰自愈重启
+  //
+  // 实证（2026-11-12）：desktopCapturer/WGC 对不可捕获窗口（资源管理器等）每 tick
+  // 重建 session 会持续泄漏，进程长跑后 E_OUTOFMEMORY(0x8007000E) 崩死
+  // （一次 16.5h、一次 14min）。agent-watcher 侧已降频+熔断，这里再加兜底：
+  // 每天 04:05 relaunch 清零进程资源，泄漏最多积累一天。凌晨 4 点是老吴
+  // 不用电脑的概率最低时段，重启只闪一下灯条（先建新进程再退旧）。
+  // -------------------------------------------------------------------------
+  const DAILY_RESTART_AT = { h: 4, m: 5 };
+  let dailyRestartTimer = null;
+  function scheduleDailySelfRestart() {
+    if (dailyRestartTimer) clearTimeout(dailyRestartTimer);
+    const now = new Date();
+    const at = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      DAILY_RESTART_AT.h,
+      DAILY_RESTART_AT.m,
+      0,
+      0
+    );
+    if (at <= now) at.setDate(at.getDate() + 1); // 已过今天 04:05 → 排明天
+    const delay = Math.min(at - now, 2 ** 31 - 1); // setTimeout 上限 24.8 天
+    dailyRestartTimer = setTimeout(() => {
+      console.log('[status-light] daily self-restart at 04:05: relaunching');
+      logError('daily self-restart triggered (planned, not a crash)');
+      app.relaunch();
+      app.exit(0);
+    }, delay);
+    dailyRestartTimer.unref?.();
+  }
+
   app.whenReady().then(() => {
     // Must be first: every later step (config load/save, logging, watcher,
     // supervisor) depends on the resolved userData paths.
@@ -2600,6 +2634,7 @@ if (!gotLock) {
     // 两者都自带静默降级，失败不影响任何既有功能。
     startRemoteConfig();
     startAutoUpdateFlow();
+    scheduleDailySelfRestart(); // rev8: 每日低峰自愈重启（WGC 泄漏兜底）
   });
 
   // Observability for abnormal child-process deaths (renderer/GPU/utility).

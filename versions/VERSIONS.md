@@ -360,6 +360,22 @@
 
 ---
 
+## v1.7.1（2026-11-12）—— WGC 画面通道泄漏止血（rev8）
+
+**根因（实证）**：desktopCapturer 每 tick 对全部窗口重建 WGC capture session，
+不可捕获窗口（资源管理器/受保护窗口/msedge 报错窗）失败重试持续泄漏 Chromium
+资源 —— 两次 E_OUTOFMEMORY(0x8007000E) 崩死（16.5h / 14min），
+stderr 刷屏 wgc_capture GetFrame failed 每 2 秒一轮。
+
+**三层防御**：
+- agent-watcher：画面通道 tick 2s→30s（泄漏 -15x，实测报错间隔精确 30s）
+- agent-watcher：目标窗口缩略图连续 30 tick 全空 → 熔断停抓，10 分钟试探恢复
+- main.js：每日 04:05 自愈重启（app.relaunch + app.exit(0)，泄漏最多积累一天）
+
+**测试**：tests/v170-rev8-screen-guard.test.js 4 断言；全量 33 文件通过。
+
+---
+
 ## v1.7.0 rev5（2026-11-11）—— 手机端灯管理远程指令通道（AI哨兵 v2.3 配套）
 
 **变更**（老吴需求：手机端可以给电脑红绿灯加灯/删灯）：

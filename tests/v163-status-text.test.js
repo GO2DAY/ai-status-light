@@ -205,9 +205,9 @@ test('E1 settings.html：swShowStatusText 开关齐四件套（checkbox/label/de
 // F. 版本档案
 // ---------------------------------------------------------------------------
 
-test('F1 版本三处一致：package.json / main.js APP_VERSION / VERSIONS.md 均为 1.7.0', () => {
-  assert.strictEqual(JSON.parse(read('package.json')).version, '1.7.0');
-  assert.ok(/const APP_VERSION = '1\.7\.0';/.test(read('main/main.js')), 'APP_VERSION 未升 1.7.0');
+test('F1 版本三处一致：package.json / main.js APP_VERSION / VERSIONS.md 均为 1.7.1', () => {
+  assert.strictEqual(JSON.parse(read('package.json')).version, '1.7.1');
+  assert.ok(/const APP_VERSION = '1\.7\.1';/.test(read('main/main.js')), 'APP_VERSION 未升 1.7.0');
   const versions = read('versions/VERSIONS.md');
   assert.ok(versions.includes('## v1.6.3'), 'VERSIONS.md 缺 v1.6.3 条目');
 });

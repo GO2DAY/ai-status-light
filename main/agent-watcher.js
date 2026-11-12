@@ -72,6 +72,15 @@ const CPU_COOL_ROUNDS = 3; // 安静约 6 秒才回落 idle
 const SCREEN_THUMB_W = 480;
 const SCREEN_THUMB_H = 270;
 const SCREEN_DIFF_RATIO = 0.006; // 采样像素变化 >= 0.6% 判「画面活跃」
+// rev8: WGC 画面通道长跑泄漏止血。desktopCapturer 每 tick 对全部窗口重建 WGC
+// capture session，不可捕获窗口（资源管理器/受保护窗口）session 建立失败仍会
+// 每 tick 重试 —— Chromium 内部持续泄漏，实测 16.5h / 14min 两次
+// E_OUTOFMEMORY(0x8007000E) 崩溃（stderr 刷屏 wgc_capture GetFrame failed）。
+// 三层防御：① tick 降频 2s→30s（泄漏速度 -15x）② 目标窗口缩略图连续全空
+// 熔断（坏链路 15 分钟内停抓）③ main.js 每日 04:05 自愈重启兜底。
+const SCREEN_TICK_MS = 30_000;
+const SCREEN_EMPTY_FUSE = 30; // 连续 30 tick（≈15 分钟）全空 → 熔断
+const SCREEN_FUSE_RETRY_MS = 10 * 60_000; // 熔断后每 10 分钟试探一轮
 const SCREEN_ACTIVE_TTL_MS = 3500; // 活跃信号有效期（约 2 个采样周期，覆盖异步 jitter）
 const SCREEN_SAMPLE_STRIDE = 4; // 每 4 个像素采 1 个（速度 vs 精度的平衡）
 const SCREEN_CHANNEL_TOLERANCE = 12; // 单通道差值容忍，抗缩略图压缩噪声
@@ -377,6 +386,8 @@ const state = new Map(); // agent -> state
 let wbPrev = 0; // 上一次查到的 working 会话数
 let wbBusy = false; // 数据库查询重入保护
 let screenBusy = false; // 画面通道重入保护（getSources 是异步的）
+let screenEmptyStreak = 0; // rev8: 连续「目标窗口非空但缩略图全空」计数（熔断用）
+let screenFusedAt = 0; // rev8: 熔断时刻；0=未熔断
 let screenWatchEnabled = true; // config.json "screenWatch": false 可关闭通道 E
 // 严格绿灯开关（本次修复）：config.json "strictRunning": false 可一键回退旧行为
 // （前台命中即绿）。缺省 true = 绿色必须带实际活动信号。
@@ -424,6 +435,12 @@ function screenDiffRatio(prev, cur) {
  */
 async function tickScreen() {
   if (screenBusy || !screenWatchEnabled) return;
+  // rev8: 熔断期间静默，到试探时间放行一轮
+  if (screenFusedAt && Date.now() - screenFusedAt < SCREEN_FUSE_RETRY_MS) return;
+  if (screenFusedAt) {
+    screenFusedAt = 0; // 试探轮：跑一次，全空会再次熔断
+    debug('screen-watcher: fuse retry probe tick');
+  }
   const targets = loadWatchers().filter(
     (w) =>
       Array.isArray(w.window) &&
@@ -446,6 +463,8 @@ async function tickScreen() {
       );
     }
     const now = Date.now();
+    let matchedTotal = 0; // rev8: 本轮目标窗口总数（熔断统计用）
+    let emptyTotal = 0; // rev8: 本轮缩略图为空的目标窗口数
     for (const w of targets) {
       if (!state.has(w.agent)) state.set(w.agent, newState());
       const st = state.get(w.agent);
@@ -455,6 +474,7 @@ async function tickScreen() {
       const matched = sources.filter(
         (s) => s.name && kws.some((k) => s.name.toLowerCase().includes(k))
       );
+      matchedTotal += matched.length; // rev8
       if (matched.length === 0) {
         debug(`screen ${w.agent}: window not found (kws=${kws.join(',')})`);
         continue;
@@ -482,7 +502,10 @@ async function tickScreen() {
         winEntry.title = dialogName(rawTitle) || rawTitle.slice(0, 24) || '（未命名窗口）';
         st.screenWindows.set(src.id, winEntry);
         const bmp = src.thumbnail.isEmpty() ? null : src.thumbnail.toBitmap();
-        if (!bmp || bmp.length === 0) continue;
+        if (!bmp || bmp.length === 0) {
+          emptyTotal++; // rev8
+          continue;
+        }
         const prev = st.screenPrevMap.get(src.id);
         if (!prev) {
           st.screenPrevMap.set(src.id, bmp); // 首帧只建基线
@@ -508,6 +531,22 @@ async function tickScreen() {
       }
       for (const id of st.screenWindows.keys()) {
         if (!seenIds.has(id)) st.screenWindows.delete(id);
+      }
+    }
+    // rev8: 熔断判定 —— 有目标窗口但缩略图全空（截图链路坏/全部不可捕获）
+    if (matchedTotal > 0) {
+      if (emptyTotal >= matchedTotal) {
+        screenEmptyStreak++;
+        if (screenEmptyStreak >= SCREEN_EMPTY_FUSE) {
+          console.log(
+            `[status-light] screen-watcher fuse: ${screenEmptyStreak} consecutive all-empty captures, ` +
+              `channel E paused for ${SCREEN_FUSE_RETRY_MS / 60000}min (WGC capture chain broken)`
+          );
+          screenFusedAt = Date.now();
+          screenEmptyStreak = 0;
+        }
+      } else {
+        screenEmptyStreak = 0;
       }
     }
   } catch (err) {
@@ -836,7 +875,7 @@ function start() {
   fastTimer = setInterval(tickFast, POLL_MS);
   screenTimer = setInterval(() => {
     tickScreen().catch((err) => debug(`screen tick unhandled: ${err && err.message}`));
-  }, POLL_MS);
+  }, SCREEN_TICK_MS); // rev8: 2s→30s，WGC 泄漏止血（见常量区注释）
   discoverFirstTimer = setTimeout(() => {
     discoverFirstTimer = null;
     tickDiscovery().catch((err) => debug(`first discovery failed: ${err && err.message}`));
